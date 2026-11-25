@@ -568,6 +568,7 @@ if (!configured) {
   $('#login').onclick = () => toast('Спочатку підключи Firebase у config.js');
   render();
 } else {
+  render(); // каркас тижня одразу, дані підтягнуться зі snapshot
   const V = 'https://www.gstatic.com/firebasejs/10.12.2/';
   Promise.all([import(V + 'firebase-app.js'), import(V + 'firebase-firestore.js'), import(V + 'firebase-auth.js')])
     .then(([App, Fs, A]) => {
