@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Розклад занять</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@400;500;600;700;800&family=Caveat:wght@600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-in">
+    <div class="brand">
+      <svg class="cap" viewBox="0 0 64 64" aria-hidden="true"><path d="M32 10 2 24l30 14 24-11.2V42h4V24L32 10Z" fill="currentColor"/><path d="M14 33v10c0 5 8 9 18 9s18-4 18-9V33L32 41.5 14 33Z" fill="currentColor" opacity=".75"/></svg>
+      <div>
+        <h1>Розклад занять</h1>
+        <p>Крок за кроком до твоїх цілей</p>
+      </div>
+    </div>
+    <ul class="perks">
+      <li><span>◆</span>Індивідуальний підхід</li>
+      <li><span>◆</span>Сучасні методики</li>
+      <li><span>◆</span>Реальні результати</li>
+    </ul>
+    <p class="quote">Навчання — це інвестиція<br>у твоє майбутнє ♡</p>
+  </div>
+</header>
+
+<main>
+  <p id="setup" class="note" hidden>Режим перегляду: Firebase ще не підключено, тому зміни ніде не зберігаються. Як підключити, описано в README.md.</p>
+
+  <div class="toolbar">
+    <p class="stats" id="stats"></p>
+    <label class="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="search" placeholder="Знайди своє ім'я…" autocomplete="off">
+    </label>
+  </div>
+
+  <div class="grid-wrap"><div class="grid" id="grid"></div></div>
+  <div class="agenda" id="agenda"></div>
+
+  <section class="panel" id="panel">
+    <div class="panel-head">
+      <h2>Кабінет викладача</h2>
+      <div class="tabs" role="tablist">
+        <button class="on" data-tab="marks">Відмітки</button>
+        <button data-tab="students">Учні та абонементи</button>
+      </div>
+      <button id="seed" class="primary" hidden>Імпортувати розклад з таблиці</button>
+    </div>
+
+    <div id="tab-marks">
+      <div class="daypick">
+        <button id="prevDay" class="round" aria-label="Попередній день">‹</button>
+        <input type="date" id="date">
+        <button id="nextDay" class="round" aria-label="Наступний день">›</button>
+        <span id="dayName"></span>
+      </div>
+      <div id="marks"></div>
+      <p class="legend"><b>Був</b> і <b>Пропустив</b> списують урок з абонемента. <b>Перенесено</b> не списує.</p>
+    </div>
+
+    <div id="tab-students" hidden>
+      <form id="addStudent" class="add">
+        <input name="name" placeholder="Новий учень" required>
+        <input name="n" type="number" value="8" min="0" max="200" aria-label="Уроків в абонементі">
+        <button class="primary">Додати</button>
+      </form>
+      <div id="students"></div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <button id="login" class="link">Вхід для викладача</button>
+</footer>
+
+<dialog id="edit">
+  <form id="editForm">
+    <h3 id="editTitle"></h3>
+    <input id="editName" list="names" placeholder="Ім'я учня" autocomplete="off">
+    <datalist id="names"></datalist>
+    <!-- Зберегти першим у DOM: Enter натискає саме його; візуально порядок розвернуто -->
+    <div class="actions">
+      <button value="save" class="primary">Зберегти</button>
+      <button value="cancel" class="ghost">Скасувати</button>
+      <button value="del" class="ghost danger">Звільнити слот</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toast" role="status"></div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
