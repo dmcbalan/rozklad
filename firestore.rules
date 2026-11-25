@@ -17,6 +17,26 @@ service cloud.firestore {
     match /public/{token} {
       allow get: if true;
       allow list, write: if isTeacher();
+      // Фото учня: додати може лише той, хто має посилання на існуючу сторінку
+      match /photos/{id} {
+        allow read: if true;
+        allow create: if exists(/databases/$(db)/documents/public/$(token))
+          && request.resource.data.keys().hasOnly(['caption', 'created'])
+          && request.resource.data.caption is string && request.resource.data.caption.size() <= 200
+          && request.resource.data.created == request.time;
+        allow delete: if isTeacher();
+      }
+      match /photoData/{id} {
+        allow read: if true;
+        allow create: if exists(/databases/$(db)/documents/public/$(token))
+          && request.resource.data.keys().hasOnly(['image'])
+          && request.resource.data.image is string && request.resource.data.image.size() < 700000;
+        allow delete: if isTeacher();
+      }
+    }
+    // Викладач бачить усі фото одним списком
+    match /{path=**}/photos/{id} {
+      allow read: if isTeacher();
     }
     // Заявки на вільні вікна: створити може будь-хто, бачить лише викладач
     match /requests/{id} {
@@ -28,9 +48,10 @@ service cloud.firestore {
         && request.resource.data.type in ['regular', 'once'];
       allow read, update, delete: if isTeacher();
     }
-    // Учні, абонементи, відвідуваність, оплати — тільки викладач
+    // Учні, абонементи, відвідуваність, оплати, нотатки — тільки викладач
     match /students/{id} { allow read, write: if isTeacher(); }
     match /attendance/{id} { allow read, write: if isTeacher(); }
     match /payments/{id} { allow read, write: if isTeacher(); }
+    match /notes/{id} { allow read, write: if isTeacher(); }
   }
 }

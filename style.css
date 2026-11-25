@@ -371,3 +371,62 @@ dialog h4.sep { margin-top: 22px; }
   .req-actions { grid-column: 1 / -1; justify-content: flex-end; }
   .st-top { grid-template-columns: 1fr; }
 }
+
+/* ---------- Урок: Meet, ДЗ, нагороди, фото ---------- */
+.btn.join { margin: 4px 0 10px; padding: 1rem 1.6rem; font-size: 1.05rem; animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 10px color-mix(in srgb, var(--acc) 0%, transparent), 0 10px 24px -10px var(--acc); } 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--acc) 45%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .btn.join { animation: none; } }
+.me-extra { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; margin-top: 20px; }
+.hw { background: color-mix(in srgb, var(--hi) 16%, var(--surf)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hi) 55%, transparent); border-radius: 18px; padding: 16px 18px; }
+.hw-text { font-size: 1.05rem; font-weight: 600; margin: 0 0 6px; white-space: pre-line; }
+.hw p { margin-top: 0; }
+.awards { padding: 4px 2px; }
+.streak { margin: 0 0 10px; font-size: 15px; }
+.streak b { font-family: Unbounded, sans-serif; color: var(--warn); }
+.bdgs { display: flex; flex-wrap: wrap; gap: 6px; }
+.bdg { display: inline-flex; align-items: center; gap: 4px; border: 0; border-radius: 999px; padding: 5px 11px; font-size: 13px; font-weight: 600;
+  background: color-mix(in srgb, var(--acc2) 14%, var(--surf)); color: color-mix(in srgb, var(--acc2) 60%, var(--ink)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--acc2) 35%, transparent); }
+.bdgs.sm { margin-top: 6px; }
+.bdgs.sm .bdg { font-size: 11px; padding: 3px 8px; }
+button.bdg:hover { text-decoration: line-through; }
+.bdg-add { border: 0; border-radius: 999px; padding: 3px 8px; font-size: 11px; font-weight: 600; background: var(--bg); color: var(--mute); box-shadow: inset 0 0 0 1px var(--line); cursor: pointer; }
+.streak-mini { font-size: 12px; font-weight: 700; color: var(--warn); }
+
+.me-photos { margin-top: 20px; padding-top: 18px; border-top: 1px dashed var(--line); }
+.upl { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.upl input { flex: 1 1 220px; border: 0; box-shadow: inset 0 0 0 2px var(--line); background: var(--surf); border-radius: 999px; padding: 9px 14px; }
+.upl input:focus { outline: 0; box-shadow: inset 0 0 0 2px var(--acc); }
+#photoBtn { cursor: pointer; }
+#photoBtn.busy { opacity: .6; pointer-events: none; }
+#photoBtn.busy::after { content: '…'; }
+.pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+.pgrid figure { position: relative; margin: 0; }
+.pgrid img, .ph-wait { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 14px; background: var(--bg); }
+.ph-wait { animation: shimmer 1.2s ease-in-out infinite alternate; }
+@keyframes shimmer { to { opacity: .5; } }
+.pgrid figcaption { font-size: 12px; color: var(--mute); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pgrid .x { top: 6px; right: 6px; width: auto; min-width: 28px; height: 28px; padding: 0 8px; font-size: 12px; border-radius: 999px; background: rgba(7, 11, 26, .65); color: #fff; }
+
+.mact { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.link-btn.has { box-shadow: inset 0 0 0 2px var(--mint); }
+.ncur, .nprev { margin: 6px 0 0; font-size: 13px; }
+.ncur { color: var(--ink); }
+.nprev { color: var(--mute); font-style: italic; }
+#notePrev:empty { display: none; }
+
+.due { background: color-mix(in srgb, var(--warn) 10%, var(--surf)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 40%, transparent); border-radius: 18px; padding: 14px 16px; margin-bottom: 12px; }
+.due p { margin: 0 0 10px; }
+.due-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.warnbtn { box-shadow: inset 0 0 0 2px var(--warn); color: var(--warn); }
+.link-btn.fresh { box-shadow: inset 0 0 0 2px var(--pink); color: var(--pink); }
+
+dialog.wide { width: min(760px, calc(100vw - 32px)); }
+.copyarea { width: 100%; border: 0; box-shadow: inset 0 0 0 2px var(--line); border-radius: 14px; padding: 12px; background: var(--surf); color: var(--ink); font: inherit; }
+
+@media (max-width: 760px) {
+  .me-extra { grid-template-columns: 1fr; }
+  .mrow .mact { grid-column: 1 / -1; justify-content: stretch; }
+  .mact .seg { flex: 1 1 100%; }
+  .mact .link-btn { flex: 1; }
+  .pgrid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+}

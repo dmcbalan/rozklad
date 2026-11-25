@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=Unbounded:wght@500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1795576850">
+<link rel="stylesheet" href="style.css?v=1795577352">
 </head>
 <body>
 
@@ -46,7 +46,17 @@
   <p id="setup" class="note" hidden>Режим перегляду: Firebase ще не підключено, тому зміни ніде не зберігаються. Як підключити, описано в README.md.</p>
 
   <!-- Особиста сторінка учня (?s=код) -->
-  <section id="me" class="me" hidden></section>
+  <section id="me" class="me" hidden>
+    <div id="meMain"></div>
+    <div class="me-photos">
+      <p class="label">📷 Мої роботи та фото</p>
+      <div class="upl">
+        <input id="photoCap" maxlength="200" placeholder="Підпис до фото (необов'язково)">
+        <label id="photoBtn" class="btn sm">Завантажити фото<input type="file" id="photoFile" accept="image/*" hidden></label>
+      </div>
+      <div id="photoGrid" class="pgrid"></div>
+    </div>
+  </section>
 
   <div class="toolbar">
     <div class="weeknav">
@@ -76,6 +86,7 @@
   <section class="panel" id="panel">
     <div class="panel-head">
       <h2>Кабінет <span class="grad">викладача</span></h2>
+      <a class="btn ghost sm" href="https://meet.google.com/fyx-nwim-wno" target="_blank" rel="noopener">🎥 Meet</a>
       <div class="tabs" role="tablist">
         <button class="on" data-tab="marks">Відмітки</button>
         <button data-tab="students">Учні</button>
@@ -128,6 +139,30 @@
 <dialog id="edit"></dialog>
 <datalist id="names"></datalist>
 
+<dialog id="noteDlg">
+  <form id="noteForm">
+    <button type="button" class="x" data-close aria-label="Закрити">✕</button>
+    <h3>Нотатка до уроку</h3>
+    <p id="noteTitle" class="muted"></p>
+    <p id="notePrev" class="nprev"></p>
+    <label class="fl">Що пройшли<input name="topic" maxlength="200" placeholder="Напр.: цикли в Scratch, гра «Лабіринт»"></label>
+    <label class="fl">Домашнє завдання (бачить учень)<textarea name="homework" maxlength="600" rows="3" placeholder="Напр.: додати 2 рівні в гру"></textarea></label>
+    <div class="actions"><button class="btn">Зберегти</button></div>
+  </form>
+</dialog>
+
+<dialog id="photoDlg" class="wide">
+  <button type="button" class="x" data-close aria-label="Закрити">✕</button>
+  <h3 id="photoTitle">Фото</h3>
+  <div id="photoDlgGrid" class="pgrid"></div>
+</dialog>
+
+<dialog id="copyDlg">
+  <button type="button" class="x" data-close aria-label="Закрити">✕</button>
+  <h3>Скопіюй повідомлення</h3>
+  <textarea id="copyArea" rows="8" class="copyarea"></textarea>
+</dialog>
+
 <dialog id="book">
   <form id="bookForm">
     <button type="button" class="x" data-close aria-label="Закрити">✕</button>
@@ -145,7 +180,7 @@
 
 <div id="toast" role="status"></div>
 
-<script src="config.js?v=1795576850"></script>
-<script src="app.js?v=1795576850"></script>
+<script src="config.js?v=1795577352"></script>
+<script src="app.js?v=1795577352"></script>
 </body>
 </html>
