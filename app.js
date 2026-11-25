@@ -90,18 +90,31 @@ function renderGrid(q) {
   $('#grid').innerHTML = html;
 }
 
+// Телефон: стрічка днів + список обраного дня (замість широкої таблиці)
+let mDay = dayIdx(new Date());
+const resetDay = () => { const t = iso(new Date()); mDay = week <= t && t < addDays(week, 7) ? dayIdx(new Date()) : 0; };
 function renderAgenda(q) {
-  const today = iso(new Date());
-  const start = week <= today && today < addDays(week, 7) ? today : week;
-  $('#agenda').innerHTML = DAYS.map((_, i) => addDays(start, i)).map(dt => {
-    const s = slotsOn(dt), hs = Object.keys(s).map(Number).sort((a, b) => a - b);
-    if (!hs.length) return '';
-    const d = dayIdx(parseIso(dt));
-    return `<section class="day${dt === today ? ' today' : ''}">
-      <h3>${DAYS[d]} <small>${longDate(dt)}</small>${dt === today ? '<em>сьогодні</em>' : ''}</h3>
-      ${hs.map(h => `<div class="arow"><time>${pad(h)}:00</time>${chip(s[h], q)}</div>`).join('')}
-    </section>`;
+  const today = iso(new Date()), nowH = new Date().getHours();
+  const free = document.body.classList.contains('free');
+  const dates = DAYS.map((_, i) => addDays(week, i));
+  const strip = dates.map((dt, i) => {
+    const n = Object.values(slotsOn(dt)).filter(s => !s.cancelled).length;
+    return `<button class="dchip${i === mDay ? ' on' : ''}${dt === today ? ' today' : ''}" data-i="${i}" aria-label="${DAYS[i]}">
+      <small>${SHORT[i]}</small><b>${parseIso(dt).getDate()}</b><i>${n ? n + ' зан.' : '—'}</i></button>`;
   }).join('');
+  const dt = dates[mDay], s = slotsOn(dt);
+  const hours = isTeacher || free ? HOURS : Object.keys(s).map(Number).sort((a, b) => a - b);
+  const rows = hours.map(h => {
+    const x = s[h], past = dt < today || (dt === today && h <= nowH);
+    const open = free && !past && (!x || x.cancelled);
+    const tag = isTeacher || open ? 'button' : 'div';
+    const hint = open ? 'вільно · записатися' : isTeacher && !x ? '+ додати' : '';
+    return `<${tag} class="drow${dt === today && h === nowH ? ' live' : ''}${open ? ' open' : ''}${past ? ' past' : ''}" data-date="${dt}" data-hour="${h}">
+      <time>${pad(h)}:00</time>${x ? chip(x, q) : `<span class="hint">${hint}</span>`}</${tag}>`;
+  }).join('');
+  $('#agenda').innerHTML = `<div class="dstrip">${strip}</div>
+    <h3 class="dtitle">${DAYS[mDay]}, ${longDate(dt)}${dt === today ? ' <em>сьогодні</em>' : ''}</h3>
+    <div class="dlist">${rows || '<p class="empty">У цей день занять немає 🎉</p>'}</div>`;
 }
 
 function renderWeek() {
@@ -420,9 +433,38 @@ $('#edit').onclick = e => {
 
 // ---------- Події ----------
 $('#search').oninput = render;
-$('#prevWeek').onclick = () => { week = addDays(week, -7); render(); };
-$('#nextWeek').onclick = () => { week = addDays(week, 7); render(); };
-$('#thisWeek').onclick = () => { week = addDays(iso(new Date()), -dayIdx(new Date())); render(); };
+$('#prevWeek').onclick = () => { week = addDays(week, -7); resetDay(); render(); };
+$('#nextWeek').onclick = () => { week = addDays(week, 7); resetDay(); render(); };
+$('#thisWeek').onclick = () => { week = addDays(iso(new Date()), -dayIdx(new Date())); resetDay(); render(); };
+
+// Перемикач теми; вибір зберігається, без вибору — як у системі
+const darkNow = () => (document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')) === 'dark';
+const themeIcon = () => {
+  $('#theme').innerHTML = darkNow()
+    ? '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>'
+    : '<svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>';
+  $('#theme').setAttribute('aria-label', darkNow() ? 'Світла тема' : 'Темна тема');
+};
+themeIcon();
+$('#theme').onclick = () => {
+  const t = darkNow() ? 'light' : 'dark';
+  document.documentElement.dataset.theme = t;
+  try { localStorage.setItem('rozklad-theme', t); } catch {}
+  themeIcon();
+};
+
+// Свайп по списку дня на телефоні — сусідній день
+let touchX = null;
+$('#agenda').addEventListener('touchstart', e => { touchX = e.touches[0].clientX; }, { passive: true });
+$('#agenda').addEventListener('touchend', e => {
+  if (touchX === null || e.target.closest('.dstrip')) return;
+  const dx = e.changedTouches[0].clientX - touchX; touchX = null;
+  if (Math.abs(dx) < 60) return;
+  mDay += dx < 0 ? 1 : -1;
+  if (mDay > 6) { week = addDays(week, 7); mDay = 0; }
+  if (mDay < 0) { week = addDays(week, -7); mDay = 6; }
+  render();
+});
 $('#date').value = iso(new Date());
 $('#date').onchange = render;
 const shiftDay = n => { $('#date').value = addDays($('#date').value, n); render(); };
@@ -443,8 +485,10 @@ $('#freeBtn').onclick = () => {
   render();
 };
 
-$('#grid').onclick = e => {
-  const cell = e.target.closest('.slot');
+$('#grid').onclick = $('#agenda').onclick = e => {
+  const day = e.target.closest('.dchip');
+  if (day) { mDay = +day.dataset.i; return render(); }
+  const cell = e.target.closest('[data-date][data-hour]');
   if (!cell) return;
   const date = cell.dataset.date, h = +cell.dataset.hour;
   if (document.body.classList.contains('free') && cell.classList.contains('open')) {

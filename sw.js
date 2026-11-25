@@ -1,5 +1,5 @@
 // Спочатку мережа (щоб оновлення одразу доходили), без мережі — збережена копія сторінки
-const CACHE = 'rozklad-v2';
+const CACHE = 'rozklad-v3';
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 self.addEventListener('fetch', e => {
