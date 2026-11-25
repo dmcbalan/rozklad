@@ -117,16 +117,23 @@ button.slot:empty:hover::after { content: '+'; color: var(--brand); font-size: 2
 .daypick input { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
 #dayName { font-weight: 700; color: var(--brand-2); }
 
-.mrow { display: grid; grid-template-columns: 56px 40px 1fr auto; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
-.mrow time { font-weight: 800; font-variant-numeric: tabular-nums; }
+.sep { margin: 18px 0 4px; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.mrow { display: grid; grid-template-columns: 40px 1fr auto; align-items: center; gap: 12px; padding: 12px 12px; margin: 0 -12px; border-top: 1px solid var(--line); border-left: 4px solid transparent; transition: background .2s; }
+.mrow.done { background: linear-gradient(90deg, rgba(22, 163, 74, .1), transparent 70%); border-left-color: var(--ok); }
+.recs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.rec { border: 0; border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 700; color: #fff; }
+.rec:hover { filter: brightness(1.1); text-decoration: line-through; }
+.rec.present { background: var(--ok); }
+.rec.absent { background: var(--bad); }
+.rec.excused { background: var(--warn); }
 .avatar { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; background: hsl(var(--h) 90% 92%); color: hsl(var(--h) 65% 30%); }
 .who small, .info small { display: block; color: var(--muted); font-size: 13px; }
 small.warn { color: var(--warn); font-weight: 700; }
 small.bad { color: var(--bad); font-weight: 700; }
 .seg { display: flex; background: var(--bg); border-radius: 12px; padding: 3px; }
 .seg button { border: 0; background: none; padding: 8px 12px; border-radius: 9px; font-weight: 600; font-size: 14px; color: var(--muted); }
-.seg button:hover { color: var(--ink); }
-.seg .on { color: #fff; }
+.seg button:hover { color: var(--ink); background: var(--card); }
+.seg .on, .seg .on:hover { color: #fff; }
 .seg .on.present { background: var(--ok); }
 .seg .on.absent { background: var(--bad); }
 .seg .on.excused { background: var(--warn); }
@@ -177,8 +184,7 @@ dialog h3 { font-family: 'Unbounded', sans-serif; font-weight: 500; margin: 0 0 
   .teacher .grid-wrap { display: block; margin-bottom: 16px; }
   .agenda { display: block; }
   .panel { padding: 18px 16px; }
-  .mrow { grid-template-columns: 48px 1fr; }
-  .mrow .avatar { display: none; }
+  .mrow { grid-template-columns: 40px 1fr; }
   .mrow .seg { grid-column: 1 / -1; }
   .seg button { flex: 1; }
   .stu { grid-template-columns: 40px 1fr auto; }

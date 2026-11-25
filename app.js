@@ -14,6 +14,7 @@ const SEED = {
 };
 
 const CHARGED = ['present', 'absent'];
+const LABEL = { present: 'Був', absent: 'Пропустив', excused: 'Перенесено' };
 const remaining = (paid, records) => (paid || 0) - records.filter(r => CHARGED.includes(r.status)).length;
 console.assert(remaining(8, [{ status: 'present' }, { status: 'absent' }, { status: 'excused' }]) === 6, 'remaining()');
 
@@ -95,21 +96,32 @@ function renderTeacher() {
   const recs = recordsBy();
   const rem = n => remaining(students[n]?.paid, recs[n] || []);
 
-  // Відмітки за обраний день: слоти з розкладу + вже збережені відмітки цього дня
+  // Відмітки за день: усі учні; хто за розкладом цього дня — зверху.
+  // Кожен клік додає окремий урок, тож 2 уроки на день = 2 кліки.
   const date = $('#date').value, d = dayIdx(parseIso(date));
   $('#dayName').textContent = DAYS[d] + (date === iso(new Date()) ? ' · сьогодні' : '');
-  const saved = Object.values(attendance).filter(r => r.date === date);
-  const hours = [...new Set([...HOURS.filter(h => lessons[`${d}-${h}`]), ...saved.map(r => r.hour)])].sort((a, b) => a - b);
-  $('#marks').innerHTML = hours.length ? hours.map(h => {
-    const rec = attendance[`${date}_${h}`], name = rec?.student || lessons[`${d}-${h}`], r = rem(name);
-    const btn = (s, label) => `<button data-s="${s}" class="${rec?.status === s ? 'on ' + s : ''}">${label}</button>`;
-    return `<div class="mrow">
-      <time>${pad(h)}:00</time>
-      <span class="avatar" style="--h:${hue(name)}">${esc(name[0])}</span>
-      <div class="who"><b>${esc(name)}</b><small class="${r <= 0 ? 'bad' : r <= 2 ? 'warn' : ''}">залишилось ${r}</small></div>
-      <div class="seg" data-hour="${h}" data-student="${esc(name)}">${btn('present', 'Був')}${btn('absent', 'Пропустив')}${btn('excused', 'Перенесено')}</div>
+  const dayRecs = {};
+  for (const [id, x] of Object.entries(attendance)) if (x.date === date) (dayRecs[x.student] ||= []).push([id, x]);
+  const rows = allNames().map(n => ({ n, hs: HOURS.filter(h => lessons[`${d}-${h}`] === n) }))
+    .sort((a, b) => (a.hs[0] ?? 99) - (b.hs[0] ?? 99) || a.n.localeCompare(b.n, 'uk'));
+  const row = ({ n, hs }) => {
+    const list = dayRecs[n] || [], r = rem(n);
+    const count = s => list.filter(([, x]) => x.status === s).length;
+    const btn = s => { const c = count(s); return `<button data-s="${s}" class="${c ? 'on ' + s : ''}" aria-pressed="${!!c}">${LABEL[s]}${c > 1 ? ` ×${c}` : ''}</button>`; };
+    return `<div class="mrow${count('present') ? ' done' : ''}" data-student="${esc(n)}" data-hours="${hs.join(',')}">
+      <span class="avatar" style="--h:${hue(n)}">${esc(n[0])}</span>
+      <div class="who">
+        <b>${esc(n)}</b>
+        <small>${hs.map(h => `${pad(h)}:00`).join(', ') || 'не за розкладом'} · <span class="${r <= 0 ? 'bad' : r <= 2 ? 'warn' : ''}">залишилось ${r}</span></small>
+        ${list.length ? `<div class="recs">${list.map(([id, x]) => `<button class="rec ${x.status}" data-del="${id}" title="Скасувати цю відмітку">${LABEL[x.status]} ✕</button>`).join('')}</div>` : ''}
+      </div>
+      <div class="seg">${btn('present')}${btn('absent')}${btn('excused')}</div>
     </div>`;
-  }).join('') : '<p class="empty">Цього дня занять немає</p>';
+  };
+  const planned = rows.filter(x => x.hs.length), others = rows.filter(x => !x.hs.length);
+  $('#marks').innerHTML =
+    (planned.length ? `<h4 class="sep">За розкладом · ${planned.length}</h4>${planned.map(row).join('')}` : '<p class="empty">За розкладом цього дня занять немає</p>') +
+    (others.length ? `<h4 class="sep">Інші учні</h4>${others.map(row).join('')}` : '');
 
   // Учні: першими ті, у кого абонемент закінчується
   const sched = n => Object.entries(lessons).filter(([, v]) => v === n)
@@ -117,13 +129,13 @@ function renderTeacher() {
     .map(([dd, h]) => `${SHORT[dd]} ${pad(h)}:00`).join(' · ');
   $('#students').innerHTML = allNames().sort((a, b) => rem(a) - rem(b)).map(n => {
     const r = rem(n), paid = students[n]?.paid || 0;
-    const last = (recs[n] || []).sort((a, b) => (b.date + pad(b.hour)).localeCompare(a.date + pad(a.hour))).slice(0, 10).reverse();
+    const last = (recs[n] || []).sort((a, b) => (b.date + pad(b.hour ?? 0)).localeCompare(a.date + pad(a.hour ?? 0))).slice(0, 10).reverse();
     return `<article class="stu${r <= 0 ? ' over' : r <= 2 ? ' low' : ''}">
       <span class="avatar" style="--h:${hue(n)}">${esc(n[0])}</span>
       <div class="info">
         <b>${esc(n)}</b>
         <small>${sched(n) || 'немає в розкладі'}</small>
-        <div class="dots" aria-label="Останні уроки">${last.map(x => `<i class="${x.status}" title="${x.date} ${pad(x.hour)}:00"></i>`).join('')}</div>
+        <div class="dots" aria-label="Останні уроки">${last.map(x => `<i class="${x.status}" title="${x.date} · ${LABEL[x.status]}"></i>`).join('')}</div>
       </div>
       <div class="rem"><strong>${r}</strong><small>з ${paid} оплачених</small></div>
       <form class="topup" data-name="${esc(n)}">
@@ -173,13 +185,16 @@ $('#editForm').onsubmit = e => {
 };
 
 $('#marks').onclick = e => {
+  const del = e.target.closest('[data-del]');
+  if (del) return run(F.deleteDoc(F.doc(db, 'attendance', del.dataset.del)));
   const b = e.target.closest('.seg button');
   if (!b) return;
-  const seg = b.parentElement, date = $('#date').value, hour = +seg.dataset.hour;
-  const ref = F.doc(db, 'attendance', `${date}_${hour}`);
-  run(attendance[ref.id]?.status === b.dataset.s
-    ? F.deleteDoc(ref) // повторний клік знімає відмітку
-    : F.setDoc(ref, { student: seg.dataset.student, date, hour, status: b.dataset.s }));
+  const row = b.closest('.mrow'), student = row.dataset.student, date = $('#date').value;
+  // година: наступний слот з розкладу цього дня (для 2-го уроку — другий слот), інакше null
+  const done = Object.values(attendance).filter(x => x.date === date && x.student === student).length;
+  const hs = row.dataset.hours ? row.dataset.hours.split(',').map(Number) : [];
+  run(F.addDoc(F.collection(db, 'attendance'), { student, date, hour: hs[done] ?? hs[0] ?? null, status: b.dataset.s })
+    .then(() => toast(`${student}: ${LABEL[b.dataset.s].toLowerCase()}`)));
 };
 
 $('#students').onsubmit = e => {
