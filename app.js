@@ -111,7 +111,9 @@ function renderWeek() {
     ? `${a.getDate()} – ${longDate(end)}` : `${longDate(week)} – ${longDate(end)}`;
   $('#thisWeek').hidden = week <= today && today <= end;
   const all = DAYS.map((_, i) => Object.values(slotsOn(addDays(week, i)))).flat().filter(s => !s.cancelled);
-  $('#stats').innerHTML = `<b>${all.length}</b> занять <i></i> <b>${new Set(all.map(s => s.student)).size}</b> учнів`;
+  $('#stats').innerHTML = `<div><b>${all.length}</b><small>занять цього тижня</small></div>
+    <div><b>${new Set(all.map(s => s.student)).size}</b><small>учнів</small></div>
+    <div><b>1:1</b><small>індивідуально</small></div>`;
 }
 
 function renderMe() {
@@ -241,7 +243,10 @@ function renderStudents(recs, rem) {
       <div class="rem"><strong>${r}</strong><small>з ${st.paid || 0} оплачених</small></div>
       <div class="stu-actions">
         <div class="packs">${PACKS.map((p, i) => `<button class="pack" data-pack="${i}" data-name="${esc(n)}"><b>+${p.n}</b> ${money(p.sum)}</button>`).join('')}</div>
-        <button class="ghost link-btn" data-link="${esc(n)}" title="${st.token ? 'Скопіювати' : 'Створити'} посилання на особисту сторінку учня">🔗 Сторінка</button>
+        ${st.token
+          ? `<a class="ghost link-btn" href="?s=${esc(st.token)}" target="_blank" rel="noopener" title="Відкрити особисту сторінку учня">Кабінет ↗</a>
+             <button class="ghost link-btn" data-link="${esc(n)}" title="Скопіювати посилання для учня">🔗 Копіювати</button>`
+          : `<button class="ghost link-btn" data-link="${esc(n)}" title="Створити особисту сторінку й скопіювати посилання">+ Кабінет учня</button>`}
         <form class="topup" data-name="${esc(n)}">
           <input name="n" type="number" min="-200" max="200" placeholder="уроків" aria-label="Уроків">
           <input name="sum" type="number" min="0" step="10" placeholder="₴" aria-label="Сума, грн">

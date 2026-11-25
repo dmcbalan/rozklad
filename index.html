@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Розклад занять</title>
-<meta name="theme-color" content="#0f2a6b">
+<title>Розклад занять | Balan Study</title>
+<meta name="theme-color" content="#F4F6FF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#070B1A" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -12,30 +13,34 @@
 <meta name="apple-mobile-web-app-title" content="Розклад">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@400;500;600;700;800&family=Caveat:wght@600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=Unbounded:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<header class="hero">
-  <div class="hero-in">
-    <div class="brand">
-      <svg class="cap" viewBox="0 0 64 64" aria-hidden="true"><path d="M32 10 2 24l30 14 24-11.2V42h4V24L32 10Z" fill="currentColor"/><path d="M14 33v10c0 5 8 9 18 9s18-4 18-9V33L32 41.5 14 33Z" fill="currentColor" opacity=".75"/></svg>
-      <div>
-        <h1>Розклад занять</h1>
-        <p>Крок за кроком до твоїх цілей</p>
-      </div>
-    </div>
-    <ul class="perks">
-      <li><span>◆</span>Індивідуальний підхід</li>
-      <li><span>◆</span>Сучасні методики</li>
-      <li><span>◆</span>Реальні результати</li>
-    </ul>
-    <p class="quote">Навчання — це інвестиція<br>у твоє майбутнє ♡</p>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs><linearGradient id="lgG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2F6BFF"/><stop offset=".5" stop-color="#7A4DFF"/><stop offset="1" stop-color="#12C2A0"/></linearGradient></defs>
+  <symbol id="lg" viewBox="0 0 40 40"><rect width="40" height="40" rx="13" fill="url(#lgG)"/><path d="M0 13Q0 0 13 0H27Q40 0 40 13V16Q20 8 0 22Z" fill="#fff" opacity=".14"/><path d="M13.5 9.5V30.5M13.5 9.5H19.2A5 5 0 0 1 19.2 19.5H13.5M13.5 19.5H20.2A5.5 5.5 0 0 1 20.2 30.5H13.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M31.5 5L32.8 8.7L36.5 10L32.8 11.3L31.5 15L30.2 11.3L26.5 10L30.2 8.7Z" fill="#FFD23F"/></symbol>
+</svg>
+
+<header class="hdr">
+  <div class="wrap hdr-in">
+    <a class="logo" href="https://balanstudy.com.ua/"><svg class="lm" viewBox="0 0 40 40" aria-hidden="true"><use href="#lg"/></svg><span class="lw"><b>Balan</b><span>Study</span></span></a>
+    <a class="btn ghost sm" href="https://balanstudy.com.ua/">На сайт</a>
   </div>
 </header>
 
-<main>
+<section class="hero">
+  <div class="aur" aria-hidden="true"></div>
+  <div class="wrap">
+    <span class="badge">📅 Актуальний розклад</span>
+    <h1>Розклад <span class="grad">занять</span></h1>
+    <p class="lead">Крок за кроком до твоїх цілей. Усі зміни з'являються тут одразу, оновлювати сторінку не треба.</p>
+    <div class="nums" id="stats"></div>
+  </div>
+</section>
+
+<main class="wrap">
   <p id="setup" class="note" hidden>Режим перегляду: Firebase ще не підключено, тому зміни ніде не зберігаються. Як підключити, описано в README.md.</p>
 
   <!-- Особиста сторінка учня (?s=код) -->
@@ -48,8 +53,7 @@
       <button id="nextWeek" class="round" aria-label="Наступний тиждень">›</button>
       <button id="thisWeek" class="link" hidden>до сьогодні</button>
     </div>
-    <p class="stats" id="stats"></p>
-    <button id="freeBtn" class="ghost free-toggle" aria-pressed="false">Вільні вікна</button>
+    <button id="freeBtn" class="btn ghost free-toggle" aria-pressed="false">Вільні вікна</button>
     <label class="search">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input id="search" placeholder="Знайди своє ім'я…" autocomplete="off">
@@ -69,14 +73,14 @@
 
   <section class="panel" id="panel">
     <div class="panel-head">
-      <h2>Кабінет викладача</h2>
+      <h2>Кабінет <span class="grad">викладача</span></h2>
       <div class="tabs" role="tablist">
         <button class="on" data-tab="marks">Відмітки</button>
         <button data-tab="students">Учні</button>
         <button data-tab="stats">Статистика</button>
         <button data-tab="requests">Заявки <b id="reqCount" hidden></b></button>
       </div>
-      <button id="seed" class="primary" hidden>Імпортувати розклад з таблиці</button>
+      <button id="seed" class="btn" hidden>Імпортувати розклад з таблиці</button>
     </div>
 
     <div id="tab-marks" class="tab">
@@ -93,7 +97,7 @@
     <div id="tab-students" class="tab" hidden>
       <form id="addStudent" class="add">
         <input name="name" placeholder="Новий учень" required>
-        <button class="primary">Додати</button>
+        <button class="btn sm">Додати</button>
       </form>
       <div id="students"></div>
       <p class="legend">Кнопки «+1 / +10 / +20» додають уроки й записують оплату в дохід. «Інша сума» для нестандартних випадків. Щоб виправити помилку, введи від'ємну кількість уроків без суми.</p>
@@ -115,7 +119,7 @@
 </main>
 
 <footer>
-  <button id="install" class="ghost" hidden>Встановити як застосунок</button>
+  <button id="install" class="btn ghost sm" hidden>Встановити як застосунок</button>
   <button id="login" class="link">Вхід для викладача</button>
 </footer>
 
@@ -133,7 +137,7 @@
       <label><input type="radio" name="type" value="once"> Тільки один раз</label>
     </div>
     <label class="fl">Коментар (необов'язково)<textarea name="note" maxlength="300" rows="2"></textarea></label>
-    <div class="actions"><button class="primary">Надіслати заявку</button></div>
+    <div class="actions"><button class="btn">Надіслати заявку</button></div>
   </form>
 </dialog>
 
