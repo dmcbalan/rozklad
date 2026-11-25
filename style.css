@@ -87,7 +87,9 @@ h1, h2, h3 { font-family: Unbounded, Onest, system-ui, sans-serif; line-height: 
 .lw span { font-weight: 500; background: linear-gradient(90deg, var(--acc), var(--mint)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 
 /* ---------- Hero ---------- */
-.hero { position: relative; padding: 3.2rem 0 2.4rem; overflow: hidden; isolation: isolate; }
+.hero { position: relative; padding: 3.2rem 0 2.6rem; overflow: hidden; isolation: isolate; }
+/* низ hero плавно переходить у фон сторінки — без видимої лінії обрізу */
+.hero::after { content: ''; position: absolute; inset: auto 0 0; height: 45%; z-index: -1; pointer-events: none; background: linear-gradient(transparent, var(--bg)); }
 .aur {
   position: absolute; inset: -20% 0 auto; height: 140%; z-index: -1; opacity: var(--aur); filter: blur(60px);
   background: radial-gradient(40% 40% at 20% 30%, var(--acc), transparent 70%), radial-gradient(35% 40% at 80% 20%, var(--acc2), transparent 70%), radial-gradient(40% 35% at 60% 80%, var(--mint), transparent 70%);
@@ -353,6 +355,11 @@ dialog h4.sep { margin-top: 22px; }
   .ring { width: 108px; height: 108px; }
   .ring strong { font-size: 30px; }
   .panel { padding: 18px 16px; }
+  .panel-head { gap: 12px; }
+  .panel h2 { font-size: 18px; }
+  .tabs { flex-wrap: nowrap; overflow-x: auto; width: 100%; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button { flex: 1 0 auto; padding: 8px 12px; font-size: 14px; white-space: nowrap; }
   .mrow { grid-template-columns: 40px 1fr; }
   .mrow .seg { grid-column: 1 / -1; }
   .seg button { flex: 1; }
