@@ -320,7 +320,7 @@ function renderRequests() {
       <span class="avatar" style="--h:${hue(r.name)}">${esc(r.name[0] || '?')}</span>
       <div class="who"><b>${esc(r.name)}</b>
         <small>${DAYS[dayIdx(parseIso(r.date))]}, ${longDate(r.date)} · ${pad(r.hour)}:00 · ${r.type === 'regular' ? 'щотижня' : 'разово'}</small>
-        <small>${esc(r.contact)}${r.note ? ' · ' + esc(r.note) : ''}</small></div>
+        ${r.note ? `<small>${esc(r.note)}</small>` : ''}</div>
       <div class="req-actions"><button class="ghost danger" data-req="${id}" data-act="no">Відхилити</button><button class="primary" data-req="${id}" data-act="yes">Прийняти</button></div>
     </div>`).join('') : '<p class="empty">Нових заявок немає. Учні залишають їх через кнопку «Вільні вікна».</p>';
 }
@@ -456,10 +456,9 @@ $('#book').onclick = e => { if (e.target.closest('[data-close]')) $('#book').clo
 $('#bookForm').onsubmit = e => {
   e.preventDefault();
   const f = e.target, el = f.elements;
-  const data = { date: f.dataset.date, hour: +f.dataset.hour, name: el['name'].value.trim().slice(0, 60),
-    contact: el['contact'].value.trim().slice(0, 100), note: el['note'].value.trim().slice(0, 300),
+  const data = { date: f.dataset.date, hour: +f.dataset.hour, name: el['name'].value.trim().slice(0, 60), note: el['note'].value.trim().slice(0, 300),
     type: el['type'].value, created: F.serverTimestamp() };
-  if (!data.name || !data.contact) return toast("Вкажи ім'я і контакт");
+  if (!data.name) return toast("Вкажи своє ім'я");
   run(F.addDoc(F.collection(db, 'requests'), data).then(() => {
     $('#book').close(); f.reset(); toast('Заявку надіслано! Викладач зв\'яжеться з тобою');
   }));
@@ -475,7 +474,7 @@ $('#requests').onclick = e => {
   const bt = F.writeBatch(db);
   if (r.type === 'regular') bt.set(F.doc(db, 'lessons', `${dayIdx(parseIso(r.date))}-${r.hour}`), { student: name });
   else bt.set(F.doc(F.collection(db, 'changes')), { date: r.date, hour: r.hour, student: name, kind: 'extra' });
-  bt.set(F.doc(db, 'students', name), { name, contact: r.contact }, { merge: true });
+  bt.set(F.doc(db, 'students', name), { name }, { merge: true });
   bt.delete(F.doc(db, 'requests', id));
   run(bt.commit().then(() => toast(`${name} додано в розклад`)));
 };
