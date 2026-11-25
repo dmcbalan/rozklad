@@ -552,7 +552,10 @@ $('#install').onclick = () => { installEvt?.prompt(); $('#install').hidden = tru
 
 // ---------- Firebase ----------
 let token = new URLSearchParams(location.search).get('s');
-try { token ? localStorage.setItem('rozklad-token', token) : (token = localStorage.getItem('rozklad-token')); } catch {}
+// Збережений код підставляємо лише у встановленому застосунку (він стартує без ?s=);
+// у браузері особиста сторінка відкривається тільки за посиланням з ?s=
+const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+try { token ? localStorage.setItem('rozklad-token', token) : standalone && (token = localStorage.getItem('rozklad-token')); } catch {}
 
 if (!configured) {
   lessons = { ...SEED };
