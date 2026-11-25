@@ -2,8 +2,14 @@
 <html lang="uk">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Розклад занять</title>
+<meta name="theme-color" content="#0f2a6b">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Розклад">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@400;500;600;700;800&family=Caveat:wght@600&display=swap" rel="stylesheet">
@@ -32,15 +38,32 @@
 <main>
   <p id="setup" class="note" hidden>Режим перегляду: Firebase ще не підключено, тому зміни ніде не зберігаються. Як підключити, описано в README.md.</p>
 
+  <!-- Особиста сторінка учня (?s=код) -->
+  <section id="me" class="me" hidden></section>
+
   <div class="toolbar">
+    <div class="weeknav">
+      <button id="prevWeek" class="round" aria-label="Попередній тиждень">‹</button>
+      <strong id="weekLabel"></strong>
+      <button id="nextWeek" class="round" aria-label="Наступний тиждень">›</button>
+      <button id="thisWeek" class="link" hidden>до сьогодні</button>
+    </div>
     <p class="stats" id="stats"></p>
+    <button id="freeBtn" class="ghost free-toggle" aria-pressed="false">Вільні вікна</button>
     <label class="search">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input id="search" placeholder="Знайди своє ім'я…" autocomplete="off">
     </label>
   </div>
 
+  <p id="freeHint" class="free-hint" hidden>Обери вільну клітинку, щоб залишити заявку на заняття.</p>
   <div class="grid-wrap"><div class="grid" id="grid"></div></div>
+  <ul class="kinds" aria-label="Позначки">
+    <li><i class="k-makeup"></i>Відпрацювання</li>
+    <li><i class="k-extra"></i>Додаткове</li>
+    <li><i class="k-moved"></i>Перенос</li>
+    <li><i class="k-off"></i>Скасовано / перенесено</li>
+  </ul>
   <div class="agenda" id="agenda"></div>
 
   <section class="panel" id="panel">
@@ -48,12 +71,14 @@
       <h2>Кабінет викладача</h2>
       <div class="tabs" role="tablist">
         <button class="on" data-tab="marks">Відмітки</button>
-        <button data-tab="students">Учні та абонементи</button>
+        <button data-tab="students">Учні</button>
+        <button data-tab="stats">Статистика</button>
+        <button data-tab="requests">Заявки <b id="reqCount" hidden></b></button>
       </div>
       <button id="seed" class="primary" hidden>Імпортувати розклад з таблиці</button>
     </div>
 
-    <div id="tab-marks">
+    <div id="tab-marks" class="tab">
       <div class="daypick">
         <button id="prevDay" class="round" aria-label="Попередній день">‹</button>
         <input type="date" id="date">
@@ -64,32 +89,51 @@
       <p class="legend">Кожне натискання додає один урок: якщо було 2 уроки, натисни «Був» двічі. <b>Був</b> і <b>Пропустив</b> списують урок з абонемента, <b>Перенесено</b> не списує. Щоб скасувати помилкову відмітку, натисни на неї під ім'ям (✕).</p>
     </div>
 
-    <div id="tab-students" hidden>
+    <div id="tab-students" class="tab" hidden>
       <form id="addStudent" class="add">
         <input name="name" placeholder="Новий учень" required>
-        <input name="n" type="number" value="8" min="0" max="200" aria-label="Уроків в абонементі">
         <button class="primary">Додати</button>
       </form>
       <div id="students"></div>
+      <p class="legend">Кнопки «+1 / +10 / +20» додають уроки й записують оплату в дохід. «Інша сума» для нестандартних випадків. Щоб виправити помилку, введи від'ємну кількість уроків без суми.</p>
+    </div>
+
+    <div id="tab-stats" class="tab" hidden>
+      <div class="daypick">
+        <button id="prevMonth" class="round" aria-label="Попередній місяць">‹</button>
+        <strong id="monthLabel"></strong>
+        <button id="nextMonth" class="round" aria-label="Наступний місяць">›</button>
+      </div>
+      <div id="statsBody"></div>
+    </div>
+
+    <div id="tab-requests" class="tab" hidden>
+      <div id="requests"></div>
     </div>
   </section>
 </main>
 
 <footer>
+  <button id="install" class="ghost" hidden>Встановити як застосунок</button>
   <button id="login" class="link">Вхід для викладача</button>
 </footer>
 
-<dialog id="edit">
-  <form id="editForm">
-    <h3 id="editTitle"></h3>
-    <input id="editName" list="names" placeholder="Ім'я учня" autocomplete="off">
-    <datalist id="names"></datalist>
-    <!-- Зберегти першим у DOM: Enter натискає саме його; візуально порядок розвернуто -->
-    <div class="actions">
-      <button value="save" class="primary">Зберегти</button>
-      <button value="cancel" class="ghost">Скасувати</button>
-      <button value="del" class="ghost danger">Звільнити слот</button>
+<dialog id="edit"></dialog>
+<datalist id="names"></datalist>
+
+<dialog id="book">
+  <form id="bookForm">
+    <button type="button" class="x" data-close aria-label="Закрити">✕</button>
+    <h3>Запис на заняття</h3>
+    <p id="bookSlot" class="muted"></p>
+    <label class="fl">Ім'я<input name="name" required maxlength="60" autocomplete="name"></label>
+    <label class="fl">Телефон або Telegram<input name="contact" required maxlength="100" autocomplete="tel"></label>
+    <div class="radios">
+      <label><input type="radio" name="type" value="regular" checked> Щотижня в цей час</label>
+      <label><input type="radio" name="type" value="once"> Тільки один раз</label>
     </div>
+    <label class="fl">Коментар (необов'язково)<textarea name="note" maxlength="300" rows="2"></textarea></label>
+    <div class="actions"><button class="primary">Надіслати заявку</button></div>
   </form>
 </dialog>
 

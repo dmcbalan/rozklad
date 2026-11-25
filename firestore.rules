@@ -4,13 +4,34 @@ service cloud.firestore {
     function isTeacher() {
       return request.auth != null && request.auth.token.email == 'ikramoonfeyx@gmail.com';
     }
-    // Розклад бачать усі, змінює тільки викладач
+    // Постійний розклад і разові зміни (переноси, відпрацювання) бачать усі
     match /lessons/{id} {
       allow read: if true;
       allow write: if isTeacher();
     }
-    // Учні, абонементи, відвідуваність — тільки викладач
+    match /changes/{id} {
+      allow read: if true;
+      allow write: if isTeacher();
+    }
+    // Особиста сторінка учня: прочитати можна лише знаючи код, переглянути список не можна
+    match /public/{token} {
+      allow get: if true;
+      allow list, write: if isTeacher();
+    }
+    // Заявки на вільні вікна: створити може будь-хто, бачить лише викладач
+    match /requests/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['date', 'hour', 'name', 'contact', 'note', 'type', 'created'])
+        && request.resource.data.date is string && request.resource.data.date.size() == 10
+        && request.resource.data.hour is int
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60
+        && request.resource.data.contact is string && request.resource.data.contact.size() > 0 && request.resource.data.contact.size() <= 100
+        && request.resource.data.note is string && request.resource.data.note.size() <= 300
+        && request.resource.data.type in ['regular', 'once'];
+      allow read, update, delete: if isTeacher();
+    }
+    // Учні, абонементи, відвідуваність, оплати — тільки викладач
     match /students/{id} { allow read, write: if isTeacher(); }
     match /attendance/{id} { allow read, write: if isTeacher(); }
+    match /payments/{id} { allow read, write: if isTeacher(); }
   }
 }
