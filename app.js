@@ -139,6 +139,16 @@ let lessons = {}, changes = {}, students = {}, attendance = {}, payments = {}, r
 let subs = {}, spins = {}, avatars = {}, meSubs = {}, meSpins = {}, meNotifs = {}, meAvatar = {};
 // Відгуки про уроки (ratings) і публічне портфоліо (?p=код портфоліо, окремий від коду кабінету)
 let ratings = {}, meRatings = {}, folio = null, folioWorks = {};
+// Хто з учнів зараз у кабінеті: токен → час останнього «я тут» (кабінет пише раз на хвилину)
+let presence = {};
+const ONLINE_MS = 150000;
+function onlineDot(n) {
+  const tok = students[n]?.token;
+  if (!tok) return '';
+  const at = presence[tok] || 0, on = Date.now() - at < ONLINE_MS;
+  const t = on ? 'У мережі' : at ? `Не в мережі · був(ла) ${new Date(at).toLocaleString('uk', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : 'Не в мережі';
+  return ` <i class="online${on ? ' on' : ''}" title="${t}" aria-label="${t}"></i>`;
+}
 const folioId = new URLSearchParams(location.search).get('p');
 const imgCache = {}; // id фото → data URL
 let isTeacher = false, db, F, me = null;
@@ -391,7 +401,7 @@ function renderChats() {
   if (!people.some(p => p.n === chatName)) chatName = people[0]?.n || null;
   $('#chatList').innerHTML = people.length ? people.map(p => `<button class="chat-item${p.n === chatName ? ' on' : ''}" data-chat="${esc(p.n)}">
       ${faceOf(p.n)}
-      <span><b>${esc(p.n)}</b><small>${p.last ? (p.last.by === 'teacher' ? 'Ви: ' : '') + esc(p.last.text) : 'Ще немає повідомлень'}</small></span>
+      <span><b>${esc(p.n)}</b>${onlineDot(p.n)}<small>${p.last ? (p.last.by === 'teacher' ? 'Ви: ' : '') + esc(p.last.text) : 'Ще немає повідомлень'}</small></span>
       ${p.unread ? `<b class="n">${p.unread}</b>` : ''}</button>`).join('')
     : '<p class="empty">Чат з\'являється, коли в учня є кабінет: «Учні» → «+ Кабінет учня».</p>';
   const cur = people.find(p => p.n === chatName);
@@ -617,7 +627,7 @@ function renderStudents(recs, rem) {
     return `<article class="stu${r <= 0 ? ' over' : r <= 3 ? ' low' : ''}">
       ${faceOf(n, g.lvl)}
       <div class="info">
-        <b>${esc(n)}</b> <span class="lvl-chip" title="${g.xp} XP">рів. ${g.lvl}</span>${pr.streak >= 3 ? ` <span class="streak-mini" title="Уроків поспіль без пропусків">🔥${pr.streak}</span>` : ''}
+        <b>${esc(n)}</b> <span class="lvl-chip" title="${g.xp} XP">рів. ${g.lvl}</span>${onlineDot(n)}${pr.streak >= 3 ? ` <span class="streak-mini" title="Уроків поспіль без пропусків">🔥${pr.streak}</span>` : ''}
         <small>${sched(n) || 'немає в розкладі'}</small>
         <div class="dots" aria-label="Останні уроки">${last.map(x => `<i class="${x.status}" title="${longDate(x.date)} · ${LABEL[x.status]}"></i>`).join('')}</div>
         <div class="medals">${g.medals.map(b => medalHtml(b, 'mini')).join('')}</div>
@@ -1138,7 +1148,7 @@ $('#seed').onclick = () => {
   run(b.commit().then(() => toast('Розклад імпортовано')));
 };
 
-setInterval(render, 60_000); // оновлює підсвітку поточної години
+setInterval(render, 30_000); // оновлює підсвітку поточної години й статус «в мережі»
 
 // ---------- Рівні й медалі ----------
 const myGrowth = () => growth({ present: me.present || 0, best: me.best || 0, manual: (me.badges || []).filter(isManual),
@@ -1720,6 +1730,12 @@ if (!configured) {
       mine('notifs', m => meNotifs = m);
       mine('avatar', m => meAvatar = m.me || {});
       mine('ratings', m => meRatings = m);
+      // «я в мережі»: раз на хвилину, поки кабінет відкритий на екрані
+      const beat = () => token && me && document.visibilityState === 'visible'
+        && F.setDoc(F.doc(db, 'public', token, 'presence', 'me'), { at: F.serverTimestamp() }).catch(() => {});
+      setInterval(beat, 60_000);
+      document.addEventListener('visibilitychange', beat);
+      beat.first = setInterval(() => { if (me) { beat(); clearInterval(beat.first); } }, 1000);
       if (folioId) {
         F.onSnapshot(F.doc(db, 'portfolio', folioId), d => { folio = d.exists() ? d.data() : false; render(); }, () => { folio = false; render(); });
         F.onSnapshot(F.collection(db, 'portfolio', folioId, 'works'), s => { folioWorks = {}; s.forEach(d => folioWorks[d.id] = d.data()); render(); }, () => {});
@@ -1748,11 +1764,12 @@ if (!configured) {
             F.onSnapshot(F.collectionGroup(db, 'photos'), s => {
               photos = {}; s.forEach(d => photos[d.id] = { ...d.data(), token: d.ref.parent.parent.id }); render();
             }, e => toast(e.message)),
-            ...['subs', 'spins', 'avatar', 'ratings'].map(name => F.onSnapshot(F.collectionGroup(db, name), s => {
+            ...['subs', 'spins', 'avatar', 'ratings', 'presence'].map(name => F.onSnapshot(F.collectionGroup(db, name), s => {
               const m = {};
               s.forEach(d => m[d.id + '@' + d.ref.parent.parent.id] = { ...d.data({ serverTimestamps: 'estimate' }), id: d.id, token: d.ref.parent.parent.id });
               if (name === 'subs') subs = m;
               if (name === 'spins') spins = Object.fromEntries(Object.entries(m).map(([k, x]) => [k, { ...x, week: x.id }]));
+              if (name === 'presence') presence = Object.fromEntries(Object.values(m).map(x => [x.token, ms(x.at)]));
               if (name === 'ratings') ratings = Object.fromEntries(Object.entries(m).map(([k, x]) => [k, { ...x, date: x.id }]));
               if (name === 'avatar') avatars = Object.fromEntries(Object.values(m).map(x => [x.token, x]));
               render();

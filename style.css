@@ -687,3 +687,7 @@ button.medal.on { background: color-mix(in srgb, var(--mint) 12%, transparent); 
   .folio-cta { padding: 22px 18px; }
   .folio-works { columns: 2; column-gap: 10px; }
 }
+
+/* ---------- В мережі / не в мережі ---------- */
+.online { display: inline-block; width: 10px; height: 10px; margin-left: 6px; border-radius: 50%; vertical-align: 1px; background: var(--bad); box-shadow: 0 0 0 2px var(--surf); }
+.online.on { background: var(--ok); box-shadow: 0 0 0 2px var(--surf), 0 0 0 5px color-mix(in srgb, var(--ok) 25%, transparent); }

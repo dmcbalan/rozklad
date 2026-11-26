@@ -90,6 +90,13 @@ service cloud.firestore {
           && request.resource.data.created == request.time;
         allow delete: if isTeacher();
       }
+      // «Я в мережі»: кабінет учня оновлює час раз на хвилину
+      match /presence/{id} {
+        allow read: if true;
+        allow write: if id == 'me' && exists(/databases/$(db)/documents/public/$(token))
+          && request.resource.data.keys().hasOnly(['at'])
+          && request.resource.data.at == request.time;
+      }
       // Персонаж учня
       match /avatar/{id} {
         allow read: if true;
@@ -107,6 +114,7 @@ service cloud.firestore {
     match /{path=**}/spins/{id} { allow read: if isTeacher(); }
     match /{path=**}/avatar/{id} { allow read: if isTeacher(); }
     match /{path=**}/ratings/{id} { allow read: if isTeacher(); }
+    match /{path=**}/presence/{id} { allow read: if isTeacher(); }
     // Портфоліо: відкривається за власним кодом (не кодом кабінету), пише лише викладач
     match /portfolio/{pid} {
       allow get: if true;
