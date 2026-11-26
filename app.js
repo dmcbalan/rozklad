@@ -137,6 +137,9 @@ const configured = !!(window.FIREBASE_CONFIG && FIREBASE_CONFIG.projectId);
 let lessons = {}, changes = {}, students = {}, attendance = {}, payments = {}, requests = {}, notes = {}, photos = {}, mePhotos = {}, msgs = {}, meMsgs = {};
 // ДЗ на перевірку, колесо, персонажі, сповіщення (subs/spins/avatars — у викладача по всіх учнях, me* — в учня свої)
 let subs = {}, spins = {}, avatars = {}, meSubs = {}, meSpins = {}, meNotifs = {}, meAvatar = {};
+// Відгуки про уроки (ratings) і публічне портфоліо (?p=код портфоліо, окремий від коду кабінету)
+let ratings = {}, meRatings = {}, folio = null, folioWorks = {};
+const folioId = new URLSearchParams(location.search).get('p');
 const imgCache = {}; // id фото → data URL
 let isTeacher = false, db, F, me = null;
 let week = addDays(iso(new Date()), -dayIdx(new Date())); // понеділок поточного тижня
@@ -260,7 +263,7 @@ function myLessons(days) {
 }
 const whenText = t => { const v = tzParts(tz, t); return `${DAYS[dayIdx(parseIso(v.date))]}, ${longDate(v.date)} · ${hm(v.min)}`; };
 const kyivNote = h => tz === BASE_TZ ? '' : `за Києвом ${pad(h)}:00`;
-const histList = list => list.length ? `<ul>${list.map(x => `<li><span>${longDate(x.date)}</span>
+const histList = list => list.length ? `<ul>${list.map(x => `<li><span>${longDate(x.date)}${meRatings[x.date] ? ` <b class="rated">${'★'.repeat(meRatings[x.date].stars)}</b>` : ''}</span>
   ${x.kind && x.kind !== 'regular' ? `<span class="tag k-${x.kind}">${KIND[x.kind]}</span>` : ''}
   <b class="st ${x.status}">${LABEL[x.status]}</b></li>`).join('')}</ul>` : '<p class="muted">Ще немає відміток</p>';
 
@@ -339,6 +342,7 @@ function renderMe() {
   renderMeChat();
   renderAwards(g);
   renderAvatarTab(g);
+  renderRate();
   renderPhotoGrid($('#photoGrid'), token, mePhotos, false);
 }
 
@@ -417,13 +421,14 @@ function loadImg(tok, id) {
   }).catch(() => { imgCache[id] = 'none'; });
 }
 const ms = t => t?.toMillis ? t.toMillis() : 0;
-function renderPhotoGrid(el, tok, list, canDelete) {
+function renderPhotoGrid(el, tok, list, canDelete, pubs) {
   const items = Object.entries(list).sort((a, b) => ms(b[1].created) - ms(a[1].created));
   el.innerHTML = items.length ? items.map(([id, p]) => {
     loadImg(tok, id);
     const src = imgCache[id];
     return `<figure>${src && src.startsWith('data:') ? `<a href="${src}" target="_blank"><img src="${src}" alt="${esc(p.caption || 'Фото')}" loading="lazy"></a>` : '<div class="ph-wait"></div>'}
       <figcaption>${p.caption ? esc(p.caption) + ' · ' : ''}${p.created ? new Date(ms(p.created)).toLocaleDateString('uk', { day: 'numeric', month: 'short' }) : 'щойно'}</figcaption>
+      ${pubs ? `<button class="ghost link-btn pub${pubs.includes(id) ? ' has' : ''}" data-pub="${id}" data-tok="${esc(tok)}">${pubs.includes(id) ? '✓ У портфоліо' : '🌐 В портфоліо'}</button>` : ''}
       ${canDelete ? `<button class="x" data-delphoto="${id}" data-tok="${esc(tok)}" aria-label="Видалити фото">✕</button>` : ''}</figure>`;
   }).join('') : '<p class="muted small">Ще немає фото</p>';
 }
@@ -447,7 +452,7 @@ function openPhotos(name) {
   dlg.dataset.name = name;
   $('#photoTitle').textContent = `Фото: ${name}`;
   const list = Object.fromEntries(Object.entries(photos).filter(([, p]) => p.token === st.token));
-  renderPhotoGrid($('#photoDlgGrid'), st.token, list, true);
+  renderPhotoGrid($('#photoDlgGrid'), st.token, list, true, st.pubWorks || []);
   if (!dlg.open) {
     dlg.showModal();
     run(F.setDoc(F.doc(db, 'students', name), { seenPhotos: Date.now() }, { merge: true }));
@@ -511,6 +516,7 @@ function renderNav() {
 }
 
 function render() {
+  if (folioId) return renderFolio();
   const q = $('#search').value.trim().toLowerCase(), v = viewWeek(), memo = {}, on = d => memo[d] ||= slotsOn(d);
   $('#tzLabel').textContent = tz === BASE_TZ ? 'Київський час' : `${tzName(tz)} · ${gmt(tz)}`;
   $('#tzBtn').classList.toggle('on', tz !== BASE_TZ);
@@ -574,7 +580,7 @@ function renderMarks(rem) {
       <span class="avatar" style="--h:${hue(n)}">${esc(n[0])}</span>
       <div class="who">
         <b>${esc(n)}</b>
-        <small>${when} · <span class="${r <= 0 ? 'bad' : r <= 2 ? 'warn' : ''}">залишилось ${r}</span></small>
+        <small>${when} · <span class="${r <= 0 ? 'bad' : r <= 2 ? 'warn' : ''}">залишилось ${r}</span>${rateOf(n, date) ? ` · <b class="rated" title="Оцінка учня">${'★'.repeat(rateOf(n, date).stars)}</b>` : ''}</small>
         ${list.length ? `<div class="recs">${list.map(([id, x]) => `<button class="rec ${x.status}" data-del="${id}" title="Скасувати цю відмітку">${LABEL[x.status]}${x.kind && x.kind !== 'regular' ? ' · ' + KIND[x.kind].toLowerCase() : ''} ✕</button>`).join('')}</div>` : ''}
         ${note ? `<p class="ncur">📝 ${noteTxt(note)}</p>` : prev ? `<p class="nprev">↩ Минулого разу (${longDate(prev.date)}): ${noteTxt(prev)}</p>` : ''}
       </div>
@@ -627,6 +633,7 @@ function renderStudents(recs, rem) {
           ? `<a class="ghost link-btn" href="?s=${esc(st.token)}" target="_blank" rel="noopener" title="Відкрити особисту сторінку учня">Кабінет ↗</a>
              <button class="ghost link-btn" data-link="${esc(n)}" title="Скопіювати посилання для учня">🔗 Копіювати</button>`
           : `<button class="ghost link-btn" data-link="${esc(n)}" title="Створити особисту сторінку й скопіювати посилання">+ Кабінет учня</button>`}
+        <button class="ghost link-btn" data-folio="${esc(n)}" title="Публічна сторінка з роботами, медалями й сертифікатами — для батьків">🌐 ${st.pid ? 'Портфоліо' : '+ Портфоліо'}</button>
         <form class="topup" data-name="${esc(n)}">
           <input name="n" type="number" min="-200" max="200" placeholder="уроків" aria-label="Уроків">
           <input name="sum" type="number" min="0" step="10" placeholder="₴" aria-label="Сума, грн">
@@ -654,6 +661,7 @@ function monthStats(m) {
     byStudent: ch.filter(x => x.kind === 'moved').length,
     cancelled: ch.filter(x => x.kind === 'cancel' && !x.to).length,
     extraPlanned: ch.filter(x => x.kind === 'extra').length,
+    ...avgRating(Object.values(ratings).filter(x => x.date.startsWith(m))),
   };
 }
 const monthName = m => new Date(m + '-15T12:00').toLocaleDateString('uk', { month: 'long', year: 'numeric' });
@@ -680,6 +688,7 @@ function renderStats() {
         <div><dt>Переніс я (відпрацювання)</dt><dd>${s.byMe}</dd></div>
         <div><dt>Переніс учень</dt><dd>${s.byStudent}</dd></div>
         <div><dt>Скасовано</dt><dd>${s.cancelled}</dd></div>
+        <div><dt>⭐ Оцінка уроків</dt><dd>${s.rate ? s.rate.toFixed(1) : '—'}<small> · ${s.rated} ${plural(s.rated, 'відгук', 'відгуки', 'відгуків')}</small></dd></div>
       </dl>
     </div>
     <h4 class="sep">Дохід за 6 місяців</h4>
@@ -690,9 +699,10 @@ function renderStats() {
         <small>${new Date(r.m + '-15T12:00').toLocaleDateString('uk', { month: 'short' })}</small></div>`).join('')}
     </div>
     <div class="table-wrap"><table>
-      <thead><tr><th>Місяць</th><th>Дохід</th><th>Проведено</th><th>Відпрац.</th><th>Додат.</th><th>Пропуски</th><th>Переноси</th></tr></thead>
-      <tbody>${rows.slice().reverse().map(r => `<tr${r.m === statMonth ? ' class="cur"' : ''}><td>${monthName(r.m)}</td><td>${money(r.income)}</td><td>${r.held}</td><td>${r.makeup}</td><td>${r.extra}</td><td>${r.absent}</td><td>${r.byMe + r.byStudent}</td></tr>`).join('')}</tbody>
+      <thead><tr><th>Місяць</th><th>Дохід</th><th>Проведено</th><th>Відпрац.</th><th>Додат.</th><th>Пропуски</th><th>Переноси</th><th>Оцінка</th></tr></thead>
+      <tbody>${rows.slice().reverse().map(r => `<tr${r.m === statMonth ? ' class="cur"' : ''}><td>${monthName(r.m)}</td><td>${money(r.income)}</td><td>${r.held}</td><td>${r.makeup}</td><td>${r.extra}</td><td>${r.absent}</td><td>${r.byMe + r.byStudent}</td><td>${r.rate ? '★ ' + r.rate.toFixed(1) : '—'}</td></tr>`).join('')}</tbody>
     </table></div>
+    ${reviewsHtml()}
     ${absentTop.length ? `<h4 class="sep">Найчастіше пропускають (3 міс.)</h4><p>${absentTop.map(([n, c]) => `<b>${esc(n)}</b> — ${c}`).join(' · ')}</p>` : ''}`;
 }
 
@@ -742,12 +752,13 @@ const synced = {};
 function syncPublic(recs, rem) {
   if (!syncPublic.ready) return;
   for (const [n, st] of Object.entries(students)) {
+    if (st.pid) syncFolio(n, st, recs);
     if (!st.token) continue;
     const pr = progress(recs[n] || []);
     const data = { name: n, paid: st.paid || 0, remaining: rem(n),
       history: (recs[n] || []).slice(0, 30).map(x => ({ date: x.date, status: x.status, kind: x.kind || 'regular' })),
       notes: notesOf(n).slice(0, 20).map(x => ({ date: x.date, topic: x.topic || '', homework: x.homework || '' })),
-      streak: pr.streak, present: pr.present, best: pr.best, badges: st.badges || [], certs: st.certs || [] };
+      streak: pr.streak, present: pr.present, best: pr.best, badges: st.badges || [], certs: st.certs || [], pid: st.pid || '' };
     const json = JSON.stringify(data);
     if (synced[st.token] === json) continue;
     synced[st.token] = json;
@@ -1024,11 +1035,18 @@ $('#noteForm').onsubmit = e => {
 document.querySelectorAll('dialog [data-close]').forEach(b => b.addEventListener('click', () => b.closest('dialog').close()));
 
 $('#photoDlg').onclick = e => {
+  const pb = e.target.closest('[data-pub]');
+  if (pb) return togglePub($('#photoDlg').dataset.name, pb.dataset.pub, pb.dataset.tok);
   const b = e.target.closest('[data-delphoto]');
   if (!b || b.dataset.sure !== '1') { if (b) { b.dataset.sure = '1'; b.textContent = 'Видалити?'; } return; }
   const bt = F.writeBatch(db), tok = b.dataset.tok, id = b.dataset.delphoto;
   bt.delete(F.doc(db, 'public', tok, 'photos', id));
   bt.delete(F.doc(db, 'public', tok, 'photoData', id));
+  const n = $('#photoDlg').dataset.name, st = students[n] || {};
+  if (st.pid && (st.pubWorks || []).includes(id)) { // прибрати й з портфоліо
+    bt.delete(F.doc(db, 'portfolio', st.pid, 'works', id));
+    bt.set(F.doc(db, 'students', n), { pubWorks: F.arrayRemove(id) }, { merge: true });
+  }
   run(bt.commit().then(() => toast('Фото видалено')));
 };
 
@@ -1082,6 +1100,11 @@ $('#students').onclick = async e => {
   if (cw) { chatName = cw.dataset.chatwith; return showTab($('#panel .tabs'), 'chats'); }
   const ph = e.target.closest('[data-photos]');
   if (ph) return openPhotos(ph.dataset.photos);
+  const fo = e.target.closest('[data-folio]');
+  if (fo) {
+    const n = fo.dataset.folio, pid = students[n]?.pid || await ensurePid(n);
+    return copyText(folioUrl(pid), `Посилання на портфоліо ${n} скопійовано. Роботи додаються кнопкою «🌐 В портфоліо» у фото учня`);
+  }
   const b = e.target.closest('[data-link]');
   if (!b) return;
   const name = b.dataset.link;
@@ -1185,7 +1208,9 @@ $('#meAvatar').onclick = e => {
 // ---------- Нагороди учня: рівень, сертифікати, колесо, колекція медалей ----------
 function renderAwards(g) {
   const certs = me.certs || [];
-  $('#meLevel').innerHTML = `<div class="lvl-card"><span class="av-face">${avatarSvg(meAv(), g.lvl, 72)}</span>${lvlHtml(g)}</div>
+  $('#meLevel').innerHTML = `${me.pid ? `<div class="folio-link"><span>🌐</span><div><b>Моє портфоліо</b><small class="muted">Сторінка з твоїми роботами, медалями й сертифікатами — покажи рідним</small></div>
+      <a class="ghost link-btn" href="${esc(folioUrl(me.pid))}" target="_blank" rel="noopener">Відкрити</a><button class="btn sm" data-sharefolio>Поділитися</button></div>` : ''}
+    <div class="lvl-card"><span class="av-face">${avatarSvg(meAv(), g.lvl, 72)}</span>${lvlHtml(g)}</div>
     <p class="muted small">XP: урок +${XP.lesson} · зараховане ДЗ +${XP.hw} · медаль від викладача +${XP.medal} · бонуси колеса</p>
     ${certs.length ? `<p class="label lbl-gap">🎓 Сертифікати</p><div class="certs">${certs.map((c, i) => `<button class="cert-card" data-showcert="${i}"><b>«${esc(c.course)}»</b><small>${longDate(c.date)} · відкрити</small></button>`).join('')}</div>` : ''}`;
   const have = new Set(g.medals), cats = [...new Set(MEDALS.map(m => m[3]))];
@@ -1193,7 +1218,11 @@ function renderAwards(g) {
     ${cats.map(c => `<p class="muted small cat">${c}</p><div class="medals">${MEDALS.filter(m => m[3] === c).map(([n, e]) => medalHtml(`${n} ${e}`, have.has(`${n} ${e}`) ? '' : 'lock')).join('')}</div>`).join('')}`;
   renderWheel();
 }
-$('#meLevel').onclick = e => { const b = e.target.closest('[data-showcert]'); if (b) openCert(me.name, me.certs[+b.dataset.showcert]); };
+$('#meLevel').onclick = e => {
+  const b = e.target.closest('[data-showcert]');
+  if (b) return openCert(me.name, me.certs[+b.dataset.showcert]);
+  if (e.target.closest('[data-sharefolio]')) shareFolio(folioUrl(me.pid), me.name);
+};
 
 let spinning = false;
 $('#wheelDisc').innerHTML = (() => {
@@ -1329,7 +1358,7 @@ $('#awardGrid').onclick = e => {
 
 // ---------- Сертифікати: викладач позначає завершений курс → сертифікат створюється сам ----------
 const COURSES = ['Розробка ігор у Scratch', 'Розробка ігор у Roblox Studio', 'Розробка ігор у Kodu Game Lab', 'Розробка ігор у Construct 3',
-  'Відеомонтаж у CapCut', 'Створення сайтів на Wix', 'Створення сайтів на WordPress', 'Створення сайтів: HTML, CSS, JavaScript',
+  'Відеомонтаж у CapCut', 'Створення сайтів на Wix', 'Створення сайтів на WordPress', 'Створення сайтів: HTML, CSS, JavaScript', 'Веб-дизайн у Figma',
   'Штучний інтелект', '3D-моделювання в Tinkercad', 'Arduino в Tinkercad', "Комп'ютерна грамотність (базова інформатика)",
   'Програмування на Python', 'Програмування на C++'];
 $('#courses').innerHTML = COURSES.map(c => `<option value="${esc(c)}">`).join('');
@@ -1414,6 +1443,7 @@ function feed() {
     for (const [id, m] of Object.entries(msgs)) if (m.by === 'student') out.push({ id, t: ms(m.created), icon: '💬', text: `${nameByToken(m.token)}: ${m.text}`, go: 'tab:chats', chat: nameByToken(m.token) });
     for (const x of Object.values(subs)) out.push({ id: x.id, t: ms(x.created), icon: '📬', text: `${nameByToken(x.token)} здав(ла) ДЗ`, go: 'tab:hw' });
     for (const [id, r] of Object.entries(requests)) out.push({ id, t: ms(r.created), icon: '📝', text: `Заявка: ${r.name}, ${shortSlot(`${r.date} ${r.hour}`)}`, go: 'tab:requests' });
+    for (const x of Object.values(ratings)) out.push({ id: 'r' + x.id + x.token, t: ms(x.created), icon: '⭐', text: `${nameByToken(x.token)} оцінив(ла) урок ${shortDay(x.date)}: ${'★'.repeat(x.stars)}${x.comment ? ' · ' + x.comment : ''}`, go: 'tab:stats' });
     for (const x of Object.values(spins)) out.push({ id: x.id + x.token, t: ms(x.created), icon: '🎡', text: `${nameByToken(x.token)} виграв(ла): ${PRIZES[x.prize]?.t || ''}`, go: 'tab:students' });
   }
   return out.sort((a, b) => b.t - a.t).slice(0, 60);
@@ -1479,6 +1509,125 @@ $('#notifList').onclick = e => {
   setView(x.go === 'me-chat' ? 'chat' : 'profile');
   if (x.go !== 'me-chat') showTab($('#me .tabs'), x.go);
   if (matchMedia('(min-width: 761px)').matches) $('#me').scrollIntoView();
+};
+
+// ---------- Відгуки: учень оцінює урок 1–5 зірок, викладач бачить середнє в статистиці ----------
+const shortDay = d => parseIso(d).toLocaleDateString('uk', { day: 'numeric', month: 'short' });
+const avgRating = list => ({ rate: list.length ? list.reduce((a, x) => a + x.stars, 0) / list.length : 0, rated: list.length });
+console.assert(avgRating([{ stars: 5 }, { stars: 4 }]).rate === 4.5 && avgRating([]).rate === 0, 'avgRating()');
+const rateOf = (n, date) => ratings[`${date}@${students[n]?.token}`];
+function reviewsHtml() {
+  const all = Object.values(ratings).sort((a, b) => b.date.localeCompare(a.date) || ms(b.created) - ms(a.created)), a = avgRating(all);
+  if (!all.length) return '<h4 class="sep">Відгуки учнів</h4><p class="empty">Ще немає відгуків. Учні оцінюють урок у кабінеті після відмітки «Був».</p>';
+  return `<h4 class="sep">Відгуки учнів · загалом ★ ${a.rate.toFixed(1)} (${a.rated})</h4>
+    <div class="reviews">${all.slice(0, 8).map(x => `<div class="rev"><span class="rev-stars">${'★'.repeat(x.stars)}<i>${'★'.repeat(5 - x.stars)}</i></span>
+      <b>${esc(nameByToken(x.token))}</b> <small class="muted">урок ${shortDay(x.date)}</small>${x.comment ? `<p>${esc(x.comment)}</p>` : ''}</div>`).join('')}</div>`;
+}
+// Картка оцінки перемальовується лише коли змінюється урок — щоб не стерти обрані зірки й текст
+function renderRate() {
+  const box = $('#rateBox'), today = tzParts(BASE_TZ, Date.now()).date;
+  const x = (me.history || []).find(h => h.status === 'present' && h.date >= addDays(today, -7) && !meRatings[h.date]);
+  const key = x ? x.date : '';
+  if (box.dataset.d === key) return;
+  box.dataset.d = key;
+  box.dataset.v = '';
+  box.hidden = !x;
+  box.innerHTML = x ? `<p class="label">⭐ Як тобі урок ${longDate(x.date)}?</p>
+    <div class="stars" role="group" aria-label="Оцінка уроку">${[1, 2, 3, 4, 5].map(i => `<button type="button" data-star="${i}" aria-label="${i} з 5">★</button>`).join('')}</div>
+    <div class="rate-more" hidden><input id="rateText" maxlength="300" placeholder="Що сподобалось або що покращити (необов'язково)" aria-label="Коментар"><button class="btn sm" id="rateSend">Надіслати</button></div>` : '';
+}
+$('#rateBox').onclick = e => {
+  const box = $('#rateBox'), st = e.target.closest('[data-star]');
+  if (st) {
+    box.dataset.v = st.dataset.star;
+    box.querySelectorAll('[data-star]').forEach(b => b.classList.toggle('on', +b.dataset.star <= +st.dataset.star));
+    box.querySelector('.rate-more').hidden = false;
+    return;
+  }
+  if (!e.target.closest('#rateSend') || !+box.dataset.v || !token || !F) return;
+  run(F.setDoc(F.doc(db, 'public', token, 'ratings', box.dataset.d), { stars: +box.dataset.v, comment: $('#rateText').value.trim().slice(0, 300), created: F.serverTimestamp() })
+    .then(() => toast('Дякую за відгук! 💙')));
+};
+
+// ---------- Портфоліо: публічна сторінка ?p=код (окремий від коду кабінету, тож нею можна ділитися) ----------
+const newCode = len => [...crypto.getRandomValues(new Uint8Array(len))].map(x => (x % 36).toString(36)).join('');
+const folioUrl = pid => `${location.origin}${location.pathname}?p=${pid}`;
+async function ensurePid(n) {
+  const pid = newCode(10);
+  await F.setDoc(F.doc(db, 'students', n), { pid }, { merge: true });
+  students[n] = { ...students[n], pid };
+  return pid;
+}
+// Дані портфоліо пише викладач (як і кабінет): рівень, медалі, сертифікати, персонаж
+function syncFolio(n, st, recs) {
+  const g = growthOf(n, recs), all = recs[n] || [], av = avatars[st.token];
+  const data = { name: n, lvl: g.lvl, xp: g.xp, medals: g.medals, certs: st.certs || [], lessons: progress(all).present, since: all.length ? all.at(-1).date : '',
+    avatar: av ? Object.fromEntries(Object.keys(AV_DEFAULT).map(k => [k, av[k] || AV_DEFAULT[k]])) : null };
+  const json = JSON.stringify(data);
+  if (synced['p' + st.pid] === json) return;
+  synced['p' + st.pid] = json;
+  run(F.setDoc(F.doc(db, 'portfolio', st.pid), data));
+}
+// Роботи в портфоліо обирає викладач: копія фото з «Моїх робіт» учня
+async function togglePub(n, id, tok) {
+  const st = students[n] || {}, on = (st.pubWorks || []).includes(id);
+  try {
+    const pid = st.pid || await ensurePid(n), ref = F.doc(db, 'portfolio', pid, 'works', id);
+    if (on) {
+      await Promise.all([F.deleteDoc(ref), F.setDoc(F.doc(db, 'students', n), { pubWorks: F.arrayRemove(id) }, { merge: true })]);
+      return toast('Роботу прибрано з портфоліо');
+    }
+    let image = imgCache[id];
+    if (!image?.startsWith('data:')) image = (await F.getDoc(F.doc(db, 'public', tok, 'photoData', id))).data()?.image;
+    if (!image?.startsWith('data:image/')) return toast('Фото ще не завантажилось, спробуй за секунду');
+    await Promise.all([F.setDoc(ref, { image, caption: photos[id]?.caption || '', created: photos[id]?.created || F.serverTimestamp() }),
+      F.setDoc(F.doc(db, 'students', n), { pubWorks: F.arrayUnion(id) }, { merge: true })]);
+    toast('Робота в портфоліо 🌐');
+  } catch (e) { toast('Помилка: ' + e.message); }
+}
+function shareFolio(url, name) {
+  if (navigator.share) return navigator.share({ title: `${name} — портфоліо | Balan Study`, url }).catch(() => {});
+  copyText(url, 'Посилання на портфоліо скопійовано');
+}
+
+function renderFolio() {
+  document.body.classList.add('folio-mode');
+  const box = $('#folio');
+  box.hidden = false;
+  if (folio === null) { box.innerHTML = `<p class="empty">${configured ? 'Завантаження портфоліо…' : 'Firebase не підключено'}</p>`; return; }
+  if (!folio) { box.innerHTML = '<div class="folio-hero"><div><h1>Портфоліо не знайдено</h1><p class="lead">Перевір посилання або попроси нове у викладача.</p></div></div>'; return; }
+  const f = folio, certs = f.certs || [], medals = f.medals || [];
+  const works = Object.entries(folioWorks).filter(([, w]) => typeof w.image === 'string' && w.image.startsWith('data:image/')).sort((a, b) => ms(b[1].created) - ms(a[1].created));
+  document.title = `${f.name} — портфоліо | Balan Study`;
+  box.innerHTML = `
+    <div class="folio-hero">
+      <div class="av-big">${avatarSvg(f.avatar || AV_DEFAULT, f.lvl, 150)}</div>
+      <div>
+        <span class="badge">🌐 Портфоліо учня</span>
+        <h1>${esc(f.name)}</h1>
+        <p class="lead">Рівень ${f.lvl} · ${rank(f.lvl)}${f.since ? ` · навчається в Balan Study з ${longDate(f.since)} ${f.since.slice(0, 4)}` : ''}</p>
+        <div class="nums">
+          <div><b>${f.lessons || 0}</b><small>${plural(f.lessons || 0, 'заняття', 'заняття', 'занять')}</small></div>
+          <div><b>${medals.length}</b><small>${plural(medals.length, 'медаль', 'медалі', 'медалей')}</small></div>
+          ${certs.length ? `<div><b>${certs.length}</b><small>${plural(certs.length, 'сертифікат', 'сертифікати', 'сертифікатів')}</small></div>` : ''}
+          ${works.length ? `<div><b>${works.length}</b><small>${plural(works.length, 'робота', 'роботи', 'робіт')}</small></div>` : ''}
+        </div>
+        <button class="btn ghost sm" data-fshare>📤 Поділитися</button>
+      </div>
+    </div>
+    ${certs.length ? `<h2 class="fh">🎓 Сертифікати</h2><div class="folio-certs">${certs.map((c, i) => `<button class="folio-cert" data-fcert="${i}" aria-label="Сертифікат «${esc(c.course)}»">${certSvg(f.name, c)}</button>`).join('')}</div>` : ''}
+    ${works.length ? `<h2 class="fh">🚀 Роботи</h2><div class="folio-works">${works.map(([, w]) => `<figure><a href="${w.image}" target="_blank"><img src="${w.image}" alt="${esc(w.caption || 'Робота')}" loading="lazy"></a>${w.caption ? `<figcaption>${esc(w.caption)}</figcaption>` : ''}</figure>`).join('')}</div>` : ''}
+    ${medals.length ? `<h2 class="fh">🏅 Медалі</h2><div class="medals">${medals.map(b => medalHtml(b)).join('')}</div>` : ''}
+    <div class="folio-cta">
+      <div><h2>Хочете, щоб ваша дитина теж створювала ігри, сайти й 3D-моделі?</h2>
+      <p>Індивідуальні онлайн-заняття 1:1 з програмування, створення ігор, сайтів і відеомонтажу.</p></div>
+      <a class="btn" href="https://balanstudy.com.ua/" target="_blank" rel="noopener">Дізнатися про заняття</a>
+    </div>`;
+}
+$('#folio').onclick = e => {
+  const c = e.target.closest('[data-fcert]');
+  if (c) return openCert(folio.name, folio.certs[+c.dataset.fcert]);
+  if (e.target.closest('[data-fshare]')) shareFolio(location.href, folio.name);
 };
 
 // ---------- PWA ----------
@@ -1567,6 +1716,11 @@ if (!configured) {
       mine('spins', m => meSpins = m);
       mine('notifs', m => meNotifs = m);
       mine('avatar', m => meAvatar = m.me || {});
+      mine('ratings', m => meRatings = m);
+      if (folioId) {
+        F.onSnapshot(F.doc(db, 'portfolio', folioId), d => { folio = d.exists() ? d.data() : false; render(); }, () => { folio = false; render(); });
+        F.onSnapshot(F.collection(db, 'portfolio', folioId, 'works'), s => { folioWorks = {}; s.forEach(d => folioWorks[d.id] = d.data()); render(); }, () => {});
+      }
 
       let unsub = [];
       A.onAuthStateChanged(auth, user => {
@@ -1591,11 +1745,12 @@ if (!configured) {
             F.onSnapshot(F.collectionGroup(db, 'photos'), s => {
               photos = {}; s.forEach(d => photos[d.id] = { ...d.data(), token: d.ref.parent.parent.id }); render();
             }, e => toast(e.message)),
-            ...['subs', 'spins', 'avatar'].map(name => F.onSnapshot(F.collectionGroup(db, name), s => {
+            ...['subs', 'spins', 'avatar', 'ratings'].map(name => F.onSnapshot(F.collectionGroup(db, name), s => {
               const m = {};
               s.forEach(d => m[d.id + '@' + d.ref.parent.parent.id] = { ...d.data({ serverTimestamps: 'estimate' }), id: d.id, token: d.ref.parent.parent.id });
               if (name === 'subs') subs = m;
               if (name === 'spins') spins = Object.fromEntries(Object.entries(m).map(([k, x]) => [k, { ...x, week: x.id }]));
+              if (name === 'ratings') ratings = Object.fromEntries(Object.entries(m).map(([k, x]) => [k, { ...x, date: x.id }]));
               if (name === 'avatar') avatars = Object.fromEntries(Object.values(m).map(x => [x.token, x]));
               render();
             }, e => toast(e.message))),

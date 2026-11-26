@@ -79,6 +79,17 @@ service cloud.firestore {
           && request.resource.data.created == request.time;
         allow delete: if isTeacher();
       }
+      // Відгук про урок: документ = дата уроку, лише створення → одна оцінка на урок-день
+      match /ratings/{date} {
+        allow read: if true;
+        allow create: if exists(/databases/$(db)/documents/public/$(token))
+          && date.size() == 10
+          && request.resource.data.keys().hasOnly(['stars', 'comment', 'created'])
+          && request.resource.data.stars is int && request.resource.data.stars >= 1 && request.resource.data.stars <= 5
+          && request.resource.data.comment is string && request.resource.data.comment.size() <= 300
+          && request.resource.data.created == request.time;
+        allow delete: if isTeacher();
+      }
       // Персонаж учня
       match /avatar/{id} {
         allow read: if true;
@@ -95,6 +106,16 @@ service cloud.firestore {
     match /{path=**}/subs/{id} { allow read: if isTeacher(); }
     match /{path=**}/spins/{id} { allow read: if isTeacher(); }
     match /{path=**}/avatar/{id} { allow read: if isTeacher(); }
+    match /{path=**}/ratings/{id} { allow read: if isTeacher(); }
+    // Портфоліо: відкривається за власним кодом (не кодом кабінету), пише лише викладач
+    match /portfolio/{pid} {
+      allow get: if true;
+      allow list, write: if isTeacher();
+      match /works/{id} {
+        allow read: if true;
+        allow write: if isTeacher();
+      }
+    }
     // Викладач бачить усі фото й чати одним списком
     match /{path=**}/photos/{id} {
       allow read: if isTeacher();

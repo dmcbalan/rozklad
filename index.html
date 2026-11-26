@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=Unbounded:wght@500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1795660000">
+<link rel="stylesheet" href="style.css?v=1795670000">
 </head>
 <body>
 
@@ -58,7 +58,7 @@
       <button data-tab="me-avatar">Персонаж</button>
       <button data-tab="me-photos">Мої роботи</button>
     </div>
-    <div id="tab-me-home" class="tab"><div id="meMain"></div></div>
+    <div id="tab-me-home" class="tab"><div id="rateBox" class="rate" hidden></div><div id="meMain"></div></div>
     <div id="tab-me-chat" class="tab" hidden>
       <div id="meChat" class="chat-msgs"></div>
       <form id="meChatForm" class="chat-form">
@@ -178,6 +178,9 @@
       <div id="requests"></div>
     </div>
   </section>
+  <!-- Публічне портфоліо учня (?p=код) -->
+  <section id="folio" class="folio" hidden></section>
+
   <!-- Телефон: вхід у кабінет за кодом і налаштування (екрани нижнього меню) -->
   <section id="signin" class="signin">
     <span class="avatar big" style="--h:230">👋</span>
@@ -304,7 +307,7 @@
 
 <div id="toast" role="status"></div>
 
-<script src="config.js?v=1795660000"></script>
-<script src="app.js?v=1795660000"></script>
+<script src="config.js?v=1795670000"></script>
+<script src="app.js?v=1795670000"></script>
 </body>
 </html>

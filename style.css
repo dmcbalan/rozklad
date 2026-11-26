@@ -329,7 +329,7 @@ dialog h4.sep { margin-top: 22px; }
 .radios input { accent-color: var(--acc); }
 .tagbtn { color: var(--k); box-shadow: inset 0 0 0 2px var(--k); }
 
-#toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 20px); opacity: 0; pointer-events: none; background: var(--ink); color: var(--bg); padding: 12px 18px; border-radius: 999px; font-weight: 600; transition: .25s; max-width: calc(100vw - 32px); z-index: 100; }
+#toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 20px); opacity: 0; pointer-events: none; background: var(--ink); color: var(--bg); padding: 12px 18px; border-radius: 18px; text-align: center; width: max-content; font-weight: 600; transition: .25s; max-width: calc(100vw - 32px); z-index: 100; }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
 
 @media (max-width: 760px) {
@@ -630,4 +630,60 @@ button.medal.on { background: color-mix(in srgb, var(--mint) 12%, transparent); 
   .medal { width: 78px; }
   .lvl-card { padding: 12px; gap: 12px; }
   .lvl-card .av-face svg { width: 56px; height: 56px; }
+}
+
+/* ---------- Відгуки про урок ---------- */
+.rate { margin-bottom: 18px; padding: 14px 16px; border-radius: 18px; background: color-mix(in srgb, var(--hi) 12%, var(--surf)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hi) 45%, transparent); }
+.stars { display: flex; gap: 4px; }
+.stars button { border: 0; background: none; padding: 0 2px; font-size: 34px; line-height: 1; color: color-mix(in srgb, var(--mute) 40%, transparent); transition: transform .15s, color .15s; }
+.stars button:hover { transform: scale(1.15); }
+.stars button.on { color: #FFB020; }
+.stars:hover button { color: #FFB020; }
+.stars button:hover ~ button { color: color-mix(in srgb, var(--mute) 40%, transparent); }
+.rate-more { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.rate-more input { flex: 1 1 220px; border: 0; box-shadow: inset 0 0 0 2px var(--line); background: var(--surf); border-radius: 999px; padding: 9px 14px; }
+.rate-more input:focus { outline: 0; box-shadow: inset 0 0 0 2px var(--acc); }
+.rated { color: #FFB020; font-size: 12px; letter-spacing: 1px; }
+.reviews { display: flex; flex-direction: column; }
+.rev { padding: 10px 0; border-bottom: 1px dashed var(--line); }
+.rev p { margin: 4px 0 0; }
+.rev-stars { color: #FFB020; margin-right: 8px; letter-spacing: 1px; }
+.rev-stars i { font-style: normal; color: var(--line); }
+
+/* ---------- Портфоліо ---------- */
+.folio-link { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px; padding: 12px 14px; margin-bottom: 12px; border-radius: 18px; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--mint) 50%, transparent); }
+.folio-link > span { font-size: 24px; }
+.folio-link > div { flex: 1 1 200px; }
+.folio-link small { display: block; font-size: 13px; }
+.pgrid .pub { margin-top: 6px; width: 100%; }
+.pgrid .pub.has { box-shadow: inset 0 0 0 2px var(--mint); color: var(--mint); }
+
+.folio-mode :is(.hero, .bnav, footer, #bell) { display: none !important; }
+.folio-mode main > :not(#folio) { display: none !important; }
+.folio { padding-top: 28px; }
+.folio-hero { position: relative; overflow: hidden; display: flex; flex-wrap: wrap; align-items: center; gap: 24px 36px; padding: 32px; border-radius: var(--r); background: var(--surf); box-shadow: inset 0 0 0 1px var(--line), var(--shadow); }
+.folio-hero::before { content: ""; position: absolute; inset: 0 0 auto; height: 5px; background: linear-gradient(90deg, var(--acc), var(--acc2), var(--mint)); }
+.folio-hero h1 { font-size: clamp(2rem, 6vw, 3.4rem); letter-spacing: -.02em; }
+.folio-hero .lead { margin: .6rem 0 1.2rem; }
+.folio-hero .nums { margin-bottom: 18px; }
+.fh { font-weight: 500; font-size: 22px; margin: 36px 0 14px; }
+.folio-certs { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.folio-cert { border: 0; padding: 0; background: none; border-radius: 14px; transition: transform .2s; }
+.folio-cert:hover { transform: translateY(-3px) rotate(-.5deg); }
+.folio-cert svg { display: block; width: 100%; height: auto; border-radius: 14px; box-shadow: 0 14px 34px -16px rgba(15, 23, 51, .55); }
+.folio-works { columns: 3 220px; column-gap: 14px; }
+.folio-works figure { break-inside: avoid; margin: 0 0 14px; }
+.folio-works img { display: block; width: 100%; border-radius: 16px; box-shadow: 0 10px 26px -16px rgba(15, 23, 51, .6); }
+.folio-works figcaption { font-size: 14px; color: var(--mute); margin-top: 6px; }
+.folio .medals { gap: 18px 6px; }
+.folio-cta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 18px; margin-top: 44px; padding: 28px; border-radius: var(--r); color: #fff; background: linear-gradient(120deg, #2F6BFF, #7A4DFF 60%, #12C2A0); }
+.folio-cta h2 { font-weight: 500; font-size: clamp(1.2rem, 3vw, 1.6rem); max-width: 620px; }
+.folio-cta p { margin: 8px 0 0; opacity: .9; }
+.folio-cta .btn { background: #fff; color: #2F2A8F; box-shadow: none; }
+
+@media (max-width: 760px) {
+  .folio-hero { padding: 22px 18px; }
+  .folio-hero .av-big svg { width: 120px; height: 120px; }
+  .folio-cta { padding: 22px 18px; }
+  .folio-works { columns: 2; column-gap: 10px; }
 }
