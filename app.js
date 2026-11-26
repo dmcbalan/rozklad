@@ -276,7 +276,7 @@ function myLessons(days) {
 }
 const whenText = t => { const v = tzParts(tz, t); return `${DAYS[dayIdx(parseIso(v.date))]}, ${longDate(v.date)} · ${hm(v.min)}`; };
 const kyivNote = h => tz === BASE_TZ ? '' : `за Києвом ${pad(h)}:00`;
-const histList = list => list.length ? `<ul>${list.map(x => `<li><span>${longDate(x.date)}${meRatings[x.date] ? ` <b class="rated">${'★'.repeat(meRatings[x.date].stars)}</b>` : ''}</span>
+const histList = list => list.length ? `<ul>${list.map(x => `<li><span>${longDate(x.date)}${x.hour != null ? `, ${hm(tzParts(tz, instant(x.date, x.hour * 60, BASE_TZ)).min)}` : ''}${ratingFor(x) ? ` <b class="rated">${'★'.repeat(ratingFor(x).stars)}</b>` : ''}</span>
   ${x.kind && x.kind !== 'regular' ? `<span class="tag k-${x.kind}">${KIND[x.kind]}</span>` : ''}
   <b class="st ${x.status}">${LABEL[x.status]}</b></li>`).join('')}</ul>` : '<p class="muted">Ще немає відміток</p>';
 
@@ -548,7 +548,7 @@ function allNames() {
 }
 function recordsBy() {
   const m = {};
-  for (const r of Object.values(attendance)) (m[r.student] ||= []).push(r);
+  for (const [id, r] of Object.entries(attendance)) (m[r.student] ||= []).push({ ...r, id });
   for (const l of Object.values(m)) l.sort((a, b) => (b.date + pad(b.hour ?? 0)).localeCompare(a.date + pad(a.hour ?? 0)));
   return m;
 }
@@ -770,7 +770,7 @@ function syncPublic(recs, rem) {
     if (!st.token) continue;
     const pr = progress(recs[n] || []);
     const data = { name: n, paid: st.paid || 0, remaining: rem(n),
-      history: (recs[n] || []).slice(0, 30).map(x => ({ date: x.date, status: x.status, kind: x.kind || 'regular' })),
+      history: (recs[n] || []).slice(0, 30).map(x => ({ id: x.id, date: x.date, hour: x.hour ?? null, status: x.status, kind: x.kind || 'regular' })),
       notes: notesOf(n).slice(0, 20).map(x => ({ date: x.date, topic: x.topic || '', homework: x.homework || '' })),
       streak: pr.streak, present: pr.present, best: pr.best, badges: st.badges || [], certs: st.certs || [], pid: st.pid || '' };
     const json = JSON.stringify(data);
@@ -1529,7 +1529,8 @@ $('#notifList').onclick = e => {
 const shortDay = d => parseIso(d).toLocaleDateString('uk', { day: 'numeric', month: 'short' });
 const avgRating = list => ({ rate: list.length ? list.reduce((a, x) => a + x.stars, 0) / list.length : 0, rated: list.length });
 console.assert(avgRating([{ stars: 5 }, { stars: 4 }]).rate === 4.5 && avgRating([]).rate === 0, 'avgRating()');
-const rateOf = (n, date) => ratings[`${date}@${students[n]?.token}`];
+// Оцінка дня у «Відмітках» (якщо уроків кілька — остання)
+const rateOf = (n, date) => Object.values(ratings).filter(x => x.token === students[n]?.token && x.date === date).sort((a, b) => ms(b.created) - ms(a.created))[0];
 const starsHtml = n => `<span class="rev-stars" aria-label="${n} з 5">${'★'.repeat(n)}<i>${'★'.repeat(5 - n)}</i></span>`;
 const revSeen = () => { try { return +localStorage.getItem('rozklad-rev-seen') || 0; } catch { return 0; } };
 function renderNewRevs() {
@@ -1558,29 +1559,29 @@ function reviewsHtml() {
 // Картка оцінки перемальовується лише коли змінюється урок — щоб не стерти обрані зірки й текст
 // Урок, який можна оцінити: щойно минув за розкладом (останні 3 дні) або відмічений «Був» за 7 днів; пропущені — ні
 let meRatingsReady = false;
-function rateCandidate() {
-  const now = Date.now(), today = tzParts(BASE_TZ, now).date, hist = me.history || [], out = [];
-  for (let i = 0; i < 3; i++) {
-    const dt = addDays(today, -i), s = slotsOn(dt);
-    for (const [h, x] of Object.entries(s))
-      if (x.student === me.name && !x.cancelled && instant(dt, h * 60, BASE_TZ) + HOUR <= now) out.push({ date: dt, h: +h });
-  }
-  for (const x of hist) if (x.status === 'present' && x.date >= addDays(today, -7)) out.push({ date: x.date });
-  const missed = d => hist.some(x => x.date === d && x.status !== 'present') && !hist.some(x => x.date === d && x.status === 'present');
-  return out.sort((a, b) => b.date.localeCompare(a.date)).find(x => !meRatings[x.date] && !missed(x.date));
+// Оцінка належить конкретній відмітці «Був» (id). Старі оцінки «на день» (id = дата) зараховуємо лише одному уроку того дня.
+function ratingFor(x) {
+  if (x.id && meRatings[x.id]) return meRatings[x.id];
+  const old = meRatings[x.date];
+  return old && !old.date && (me.history || []).find(h => h.date === x.date && h.status === 'present') === x ? old : null;
 }
+// Неоцінені уроки «Був» за 7 днів, найновіший перший
+const unrated = () => { const today = tzParts(BASE_TZ, Date.now()).date;
+  return (me.history || []).filter(x => x.id && x.status === 'present' && x.date >= addDays(today, -7) && !ratingFor(x)); };
+const rateCandidate = () => unrated()[0];
 const RATE_HINT = ['', 'Зовсім не сподобалось 😕', 'Могло бути краще 🤔', 'Нормально 🙂', 'Добре! 😊', 'Супер! 🤩'];
 const starButtons = () => [1, 2, 3, 4, 5].map(i => `<button type="button" data-star="${i}" aria-label="${i} з 5">★</button>`).join('');
-const sendRating = (date, stars, comment) => run(F.setDoc(F.doc(db, 'public', token, 'ratings', date), { stars, comment: comment.trim().slice(0, 300), created: F.serverTimestamp() })
+const sendRating = (id, date, stars, comment) => run(F.setDoc(F.doc(db, 'public', token, 'ratings', id), { date, stars, comment: comment.trim().slice(0, 300), created: F.serverTimestamp() })
   .then(() => toast(stars >= 4 ? 'Дякую за відгук! 💙' : 'Дякую! Врахуємо, щоб наступний урок був кращим 💙')));
-// Спливне вікно після уроку — один раз на кожен урок-день
+// Спливне вікно після кожної відмітки «Був» — один раз на урок.
+// Показуючи його, позначаємо «запитано» всі неоцінені уроки, щоб старі не вискакували чергою одне за одним.
 function askRating(x) {
-  const k = `rozklad-rateask-${token}-${x.date}`;
-  try { if (localStorage.getItem(k)) return; localStorage.setItem(k, 1); } catch { return; }
+  const k = id => `rozklad-rateask-${token}-${id}`;
+  try { if (localStorage.getItem(k(x.id))) return; unrated().forEach(u => localStorage.setItem(k(u.id), 1)); } catch { return; }
   const f = $('#rateForm'), today = tzParts(BASE_TZ, Date.now()).date;
-  f.dataset.date = x.date; f.dataset.v = ''; f.reset();
+  f.dataset.id = x.id; f.dataset.date = x.date; f.dataset.v = ''; f.reset();
   $('#rateFace').innerHTML = avatarSvg(meAv(), myGrowth().lvl, 84);
-  $('#rateTitle').textContent = `Як пройшов урок ${x.date === today ? 'сьогодні' : longDate(x.date)}${x.h !== undefined ? ` о ${hm(tzParts(tz, instant(x.date, x.h * 60, BASE_TZ)).min)}` : ''}?`;
+  $('#rateTitle').textContent = `Як пройшов урок ${x.date === today ? 'сьогодні' : longDate(x.date)}${x.hour != null ? ` о ${hm(tzParts(tz, instant(x.date, x.hour * 60, BASE_TZ)).min)}` : ''}?`;
   $('#rateStars').innerHTML = starButtons();
   $('#rateHint').textContent = 'Обери від 1 до 5 зірок';
   $('#rateDlgSend').disabled = true;
@@ -1599,19 +1600,20 @@ $('#rateForm').onsubmit = e => {
   e.preventDefault();
   const f = e.target, v = +f.dataset.v;
   if (!v || !token || !F) return;
-  sendRating(f.dataset.date, v, f.elements['comment'].value);
+  sendRating(f.dataset.id, f.dataset.date, v, f.elements['comment'].value);
   $('#rateDlg').close();
 };
 
 function renderRate() {
   const box = $('#rateBox'), x = rateCandidate();
   if (x && meRatingsReady && !isTeacher && !document.querySelector('dialog[open]')) askRating(x);
-  const key = x ? x.date : '';
-  if (box.dataset.d === key) return;
-  box.dataset.d = key;
+  const key = x ? x.id : '';
+  if (box.dataset.id === key) return;
+  box.dataset.id = key;
+  box.dataset.d = x ? x.date : '';
   box.dataset.v = '';
   box.hidden = !x;
-  box.innerHTML = x ? `<p class="label">⭐ Як тобі урок ${longDate(x.date)}?</p>
+  box.innerHTML = x ? `<p class="label">⭐ Як тобі урок ${longDate(x.date)}${x.hour != null ? ` о ${hm(tzParts(tz, instant(x.date, x.hour * 60, BASE_TZ)).min)}` : ''}?</p>
     <div class="stars" role="group" aria-label="Оцінка уроку">${starButtons()}</div>
     <div class="rate-more" hidden><input id="rateText" maxlength="300" placeholder="Що сподобалось або що покращити (необов'язково)" aria-label="Коментар"><button class="btn sm" id="rateSend">Надіслати</button></div>` : '';
 }
@@ -1624,7 +1626,7 @@ $('#rateBox').onclick = e => {
     return;
   }
   if (!e.target.closest('#rateSend') || !+box.dataset.v || !token || !F) return;
-  sendRating(box.dataset.d, +box.dataset.v, $('#rateText').value);
+  sendRating(box.dataset.id, box.dataset.d, +box.dataset.v, $('#rateText').value);
 };
 
 // ---------- Портфоліо: публічна сторінка ?p=код (окремий від коду кабінету, тож нею можна ділитися) ----------
@@ -1835,7 +1837,7 @@ if (!configured) {
               if (name === 'subs') subs = m;
               if (name === 'spins') spins = Object.fromEntries(Object.entries(m).map(([k, x]) => [k, { ...x, week: x.id }]));
               if (name === 'presence') presence = Object.fromEntries(Object.values(m).map(x => [x.token, ms(x.at)]));
-              if (name === 'ratings') ratings = Object.fromEntries(Object.entries(m).map(([k, x]) => [k, { ...x, date: x.id }]));
+              if (name === 'ratings') ratings = Object.fromEntries(Object.entries(m).map(([k, x]) => [k, { ...x, date: x.date || x.id }]));
               if (name === 'avatar') avatars = Object.fromEntries(Object.values(m).map(x => [x.token, x]));
               render();
             }, e => toast(e.message))),
