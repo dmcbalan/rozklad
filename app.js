@@ -629,7 +629,7 @@ function renderStudents(recs, rem) {
       <div class="info">
         <b>${esc(n)}</b> <span class="lvl-chip" title="${g.xp} XP">рів. ${g.lvl}</span>${onlineDot(n)}${pr.streak >= 3 ? ` <span class="streak-mini" title="Уроків поспіль без пропусків">🔥${pr.streak}</span>` : ''}
         <small>${sched(n) || 'немає в розкладі'}</small>
-        <div class="dots" aria-label="Останні уроки">${last.map(x => `<i class="${x.status}" title="${longDate(x.date)} · ${LABEL[x.status]}"></i>`).join('')}</div>
+        ${last.length ? `<div class="dots" aria-label="Останні уроки"><small>Уроки</small>${last.map(x => `<i class="${x.status}" title="${longDate(x.date)} · ${LABEL[x.status]}">${{ present: '✓', absent: '✕', excused: '↻' }[x.status] || ''}</i>`).join('')}</div>` : ''}
         <div class="medals">${g.medals.map(b => medalHtml(b, 'mini')).join('')}</div>
         ${spin ? `<small>🎡 Колесо цього тижня: <b>${esc(PRIZES[spin.prize]?.t || '')}</b></small>` : ''}
       </div>
