@@ -152,7 +152,10 @@ function toast(msg) {
   clearTimeout(toast.t);
   toast.t = setTimeout(() => t.classList.remove('show'), 3200);
 }
-const run = p => p.catch(e => toast('Помилка: ' + e.message));
+const errText = e => e?.code === 'permission-denied'
+  ? 'Немає доступу. Якщо щойно змінювались правила — опублікуй firestore.rules у Firebase і зачекай хвилину'
+  : 'Помилка: ' + e.message;
+const run = p => p.catch(e => toast(errText(e)));
 
 // Розклад на конкретну дату: постійні заняття + разові зміни (changes)
 function slotsOn(date) {
@@ -1583,7 +1586,7 @@ async function togglePub(n, id, tok) {
     await Promise.all([F.setDoc(ref, { image, caption: photos[id]?.caption || '', created: photos[id]?.created || F.serverTimestamp() }),
       F.setDoc(F.doc(db, 'students', n), { pubWorks: F.arrayUnion(id) }, { merge: true })]);
     toast('Робота в портфоліо 🌐');
-  } catch (e) { toast('Помилка: ' + e.message); }
+  } catch (e) { toast(errText(e)); }
 }
 function shareFolio(url, name) {
   if (navigator.share) return navigator.share({ title: `${name} — портфоліо | Balan Study`, url }).catch(() => {});
