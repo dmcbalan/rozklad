@@ -717,3 +717,15 @@ button.medal.on { background: color-mix(in srgb, var(--mint) 12%, transparent); 
 .rate-btn:hover { background: color-mix(in srgb, #FFB020 28%, var(--surf)); }
 :root[data-theme="dark"] .rate-btn { color: #FFC24D; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .rate-btn { color: #FFC24D; } }
+
+/* ---------- Завершили навчання ---------- */
+.link-btn.sure { background: var(--bad); color: #fff; box-shadow: none; white-space: normal; text-align: left; border-radius: 14px; }
+.arch { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 12px; }
+.arch-head { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: var(--bg); border-radius: 14px; padding: 12px 14px; font-weight: 700; text-align: left; }
+.arch-head i { margin-left: auto; font-style: normal; color: var(--mute); }
+.arch-row { display: grid; grid-template-columns: 40px 1fr auto; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px dashed var(--line); }
+.arch-act { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; max-width: 380px; }
+@media (max-width: 760px) {
+  .arch-row { grid-template-columns: 40px 1fr; }
+  .arch-act { grid-column: 1 / -1; justify-content: flex-start; max-width: none; }
+}

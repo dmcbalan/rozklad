@@ -392,7 +392,7 @@ let chatName = null;
 function renderChats() {
   const byTok = {};
   for (const m of Object.values(msgs)) (byTok[m.token] ||= []).push(m);
-  const people = Object.entries(students).filter(([, st]) => st.token).map(([n, st]) => {
+  const people = Object.entries(students).filter(([n, st]) => st.token && !isArchived(n)).map(([n, st]) => {
     const list = byTime(byTok[st.token] || []);
     return { n, list, last: list.at(-1), unread: list.filter(m => m.by === 'student' && ms(m.created) > (st.seenChat || 0)).length };
   }).sort((a, b) => ms(b.last?.created) - ms(a.last?.created) || a.n.localeCompare(b.n, 'uk'));
@@ -544,8 +544,10 @@ function render() {
 }
 
 // ---------- Кабінет викладача ----------
+// Учні, що «Завершили навчання», не показуються у відмітках, підказках і основному списку
+const isArchived = n => !!students[n]?.archived;
 function allNames() {
-  return [...new Set([...Object.keys(students), ...Object.values(lessons)])].sort((a, b) => a.localeCompare(b, 'uk'));
+  return [...new Set([...Object.keys(students), ...Object.values(lessons)])].filter(n => !isArchived(n)).sort((a, b) => a.localeCompare(b, 'uk'));
 }
 function recordsBy() {
   const m = {};
@@ -654,9 +656,60 @@ function renderStudents(recs, rem) {
           <input name="sum" type="number" min="0" step="10" placeholder="₴" aria-label="Сума, грн">
           <button class="ghost">Інша сума</button>
         </form>
+        ${sure.arch === n ? `<button class="ghost link-btn danger sure" data-archive="${esc(n)}">Точно? Перенести в «Завершили навчання»</button>`
+          : `<button class="ghost link-btn danger" data-archive="${esc(n)}" title="Перенести в «Завершили навчання»">🗑 Видалити</button>`}
       </div>
     </article>`;
-  }).join('');
+  }).join('') + archivedHtml();
+}
+// Підтвердження видалення: друге натискання протягом 8 с (стан живе поза розміткою, бо список перемальовується)
+const sure = {};
+const askSure = (kind, n) => { sure[kind] = n; clearTimeout(sure.t); sure.t = setTimeout(() => { sure.arch = sure.purge = null; render(); }, 8000); render(); };
+let archOpen = false;
+const slotName = k => { const [d, h] = k.split('-'); return `${SHORT[d]} ${pad(h)}:00`; };
+function archivedHtml() {
+  const list = Object.keys(students).filter(isArchived).sort((a, b) => a.localeCompare(b, 'uk'));
+  if (!list.length) return '';
+  return `<div class="arch"><button class="arch-head" data-archtoggle aria-expanded="${archOpen}">🎓 Завершили навчання · ${list.length} <i>${archOpen ? '▴' : '▾'}</i></button>
+    ${archOpen ? list.map(n => { const st = students[n]; return `<div class="arch-row">${faceOf(n)}
+      <div class="who"><b>${esc(n)}</b><small>завершив(ла) ${longDate(st.archived)} ${st.archived.slice(0, 4)}${(st.certs || []).length ? ` · 🎓 ${st.certs.length}` : ''}${(st.archivedSlots || []).length ? ` · був(ла) у розкладі: ${st.archivedSlots.map(slotName).join(', ')}` : ''}</small></div>
+      <div class="arch-act"><button class="ghost link-btn" data-restore="${esc(n)}">↩ Повернути</button>
+        ${sure.purge === n ? `<button class="ghost link-btn danger sure" data-purge="${esc(n)}">Так, стерти все: відмітки, оплати (дохід у статистиці зменшиться), чат, ДЗ, фото, портфоліо</button>`
+          : `<button class="ghost link-btn danger" data-purge="${esc(n)}">🗑 Видалити назавжди</button>`}</div></div>`; }).join('') : ''}</div>`;
+}
+// Крок 1: «Завершив навчання» — прибираємо зі списку й постійного розкладу (слоти запам'ятовуємо для «Повернути»)
+async function archiveStudent(n) {
+  const slots = Object.entries(lessons).filter(([, v]) => v === n).map(([k]) => k), bt = F.writeBatch(db);
+  slots.forEach(k => bt.delete(F.doc(db, 'lessons', k)));
+  bt.set(F.doc(db, 'students', n), { name: n, archived: iso(new Date()), archivedSlots: slots }, { merge: true });
+  await bt.commit();
+  toast(`${n} — у «Завершили навчання»`);
+}
+async function restoreStudent(n) {
+  const st = students[n] || {}, bt = F.writeBatch(db), busy = [];
+  for (const k of st.archivedSlots || []) lessons[k] ? busy.push(k) : bt.set(F.doc(db, 'lessons', k), { student: n });
+  bt.set(F.doc(db, 'students', n), { archived: F.deleteField(), archivedSlots: F.deleteField() }, { merge: true });
+  await bt.commit();
+  toast(busy.length ? `${n} повернуто. Слоти, вже зайняті іншими, не відновлено: ${busy.map(slotName).join(', ')}` : `${n} повернуто до списку учнів`);
+}
+// Крок 2: повне видалення з бази — учень, відмітки, оплати, нотатки, розклад, кабінет з усім вмістом, портфоліо
+async function purgeStudent(n) {
+  const st = students[n] || {}, refs = [F.doc(db, 'students', n)];
+  const own = (coll, map) => Object.entries(map).forEach(([id, x]) => x.student === n && refs.push(F.doc(db, coll, id)));
+  own('attendance', attendance); own('payments', payments); own('notes', notes); own('changes', changes);
+  Object.entries(lessons).forEach(([k, v]) => v === n && refs.push(F.doc(db, 'lessons', k)));
+  const all = async (...path) => (await F.getDocs(F.collection(db, ...path))).forEach(d => refs.push(d.ref));
+  if (st.token) {
+    for (const c of ['photos', 'photoData', 'messages', 'notifs', 'subs', 'subData', 'spins', 'ratings', 'presence', 'avatar']) await all('public', st.token, c);
+    refs.push(F.doc(db, 'public', st.token));
+  }
+  if (st.pid) { await all('portfolio', st.pid, 'works'); refs.push(F.doc(db, 'portfolio', st.pid)); }
+  for (let i = 0; i < refs.length; i += 400) { // у пакеті Firestore до 500 операцій
+    const bt = F.writeBatch(db);
+    refs.slice(i, i + 400).forEach(r => bt.delete(r));
+    await bt.commit();
+  }
+  toast(`${n} повністю видалено з бази`);
 }
 
 // ----- Статистика -----
@@ -1100,6 +1153,13 @@ $('#students').onsubmit = e => {
 };
 
 $('#students').onclick = async e => {
+  if (e.target.closest('[data-archtoggle]')) { archOpen = !archOpen; return render(); }
+  const ar = e.target.closest('[data-archive]');
+  if (ar) { const n = ar.dataset.archive; if (sure.arch !== n) return askSure('arch', n); sure.arch = null; return archiveStudent(n).catch(err => toast(errText(err))); }
+  const rs = e.target.closest('[data-restore]');
+  if (rs) return restoreStudent(rs.dataset.restore).catch(err => toast(errText(err)));
+  const pu = e.target.closest('[data-purge]');
+  if (pu) { const n = pu.dataset.purge; if (sure.purge !== n) return askSure('purge', n); sure.purge = null; toast(`Видаляю ${n}…`); return purgeStudent(n).catch(err => toast(errText(err))); }
   const pk = e.target.closest('[data-pack]');
   if (pk) return pay(pk.dataset.name, PACKS[pk.dataset.pack].n, PACKS[pk.dataset.pack].sum);
   const msg = e.target.closest('[data-msg]');

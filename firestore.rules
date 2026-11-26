@@ -97,6 +97,7 @@ service cloud.firestore {
         allow write: if id == 'me' && exists(/databases/$(db)/documents/public/$(token))
           && request.resource.data.keys().hasOnly(['at'])
           && request.resource.data.at == request.time;
+        allow delete: if isTeacher();
       }
       // Персонаж учня
       match /avatar/{id} {
@@ -108,6 +109,7 @@ service cloud.firestore {
           && request.resource.data.head is string && request.resource.data.head.size() <= 20
           && request.resource.data.face is string && request.resource.data.face.size() <= 20
           && request.resource.data.back is string && request.resource.data.back.size() <= 20;
+        allow delete: if isTeacher();
       }
     }
     // Викладач бачить усі фото, чати, ДЗ, колесо й персонажі одним списком
