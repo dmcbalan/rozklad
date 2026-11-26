@@ -480,3 +480,41 @@ dialog.wide { width: min(760px, calc(100vw - 32px)); }
   .chat-item { flex: none; width: 210px; }
   .msg { max-width: 88%; }
 }
+
+/* ---------- Телефон: нижнє меню й екрани (на комп'ютері все на одній сторінці, як раніше) ---------- */
+.bnav, .signin, .msettings { display: none; }
+@media (max-width: 760px) {
+  .bnav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; position: fixed; inset: auto 0 0; z-index: 80;
+    background: var(--hdr); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-top: 1px solid var(--line);
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)); }
+  .bnav button { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; border: 0; background: none; color: var(--mute); font-size: 11px; font-weight: 600; padding: 6px 0; border-radius: 14px; }
+  .bnav svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .bnav .on { color: var(--acc); background: color-mix(in srgb, var(--acc) 10%, transparent); }
+  .bnav b { position: absolute; top: 2px; left: calc(50% + 6px); background: var(--bad); color: #fff; font-size: 10px; line-height: 16px; border-radius: 999px; padding: 0 6px; }
+  footer { display: none; }
+  main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+  #toast { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+
+  .signin, .msettings { display: block; background: var(--surf); border-radius: var(--r); padding: 22px 18px; box-shadow: inset 0 0 0 1px var(--line), var(--shadow); }
+  .signin h2, .msettings h2 { font-weight: 500; font-size: 20px; margin: 12px 0 6px; }
+  .msettings h2 { margin-top: 0; }
+  .signin form { margin: 14px 0 6px; }
+  .set-list { display: flex; flex-direction: column; margin-top: 10px; }
+  .set-list button { display: grid; grid-template-columns: 28px 1fr auto 14px; align-items: center; gap: 10px; border: 0; border-top: 1px solid var(--line); background: none; padding: 14px 2px; text-align: left; }
+  .set-list button:first-child { border-top: 0; }
+  .set-list span { font-size: 20px; }
+  .set-list small { color: var(--mute); font-size: 13px; }
+  .set-list i { font-style: normal; color: var(--mute); font-size: 20px; }
+
+  /* який екран зараз відкрито */
+  body[data-view]:not([data-view="schedule"]) .hero { display: none; }
+  body[data-view]:not([data-view="schedule"]) main { padding-top: 16px; }
+  [data-view="schedule"] :is(#me, #signin, #settings) { display: none; }
+  [data-view="chat"] main > :not(#me, #signin),
+  [data-view="profile"] main > :not(#me, #signin),
+  [data-view="settings"] main > :not(#settings) { display: none !important; }
+  [data-view="chat"] :is(#meHi, #me .tabs) { display: none; }
+  [data-view="chat"] #me { padding: 12px; }
+  [data-view="chat"] .chat-msgs { height: calc(100dvh - 250px - env(safe-area-inset-bottom, 0px)); }
+  #me .tabs [data-tab="me-chat"] { display: none; }
+}

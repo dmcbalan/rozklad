@@ -283,10 +283,7 @@ function renderMe() {
       <p class="muted small"><b>${longDate(x.date)}</b>${x.topic ? ' · тема: ' + esc(x.topic) : ''}</p>
       ${x.homework ? `<p class="hw-text">${esc(x.homework)}</p>` : '<p class="muted small">Без домашнього завдання</p>'}</div>`).join('')
     : '<p class="muted">Тут з\'являться теми уроків і домашні завдання</p>';
-  $('#forget').onclick = () => {
-    try { localStorage.removeItem('rozklad-token'); } catch {}
-    me = null; history.replaceState(null, '', location.pathname); $('#search').value = ''; render();
-  };
+  $('#forget').onclick = forget;
   renderMeChat();
   renderPhotoGrid($('#photoGrid'), token, mePhotos, false);
 }
@@ -403,6 +400,41 @@ function openPhotos(name) {
   }
 }
 
+// Вихід з кабінету: забуваємо код і перезавантажуємо без нього (щоб зупинити підписки)
+function forget() {
+  try { localStorage.removeItem('rozklad-token'); localStorage.removeItem('rozklad-login'); } catch {}
+  location.href = location.pathname + '#profile';
+}
+
+// ---------- Нижнє меню на телефоні: екрани Розклад / Чат / Профіль / Налаштування ----------
+const VIEWS = ['schedule', 'chat', 'profile', 'settings'];
+let meMissing = false;
+function setView(v) {
+  document.body.dataset.view = v;
+  history.replaceState(null, '', location.pathname + location.search + (v === 'schedule' ? '' : '#' + v));
+  const tl = $('#me .tabs');
+  if (v === 'chat') showTab(tl, 'me-chat');
+  else if (v === 'profile' && !$('#tab-me-chat').hidden) showTab(tl, 'me-home');
+  else render();
+  scrollTo(0, 0);
+}
+function renderNav() {
+  const view = document.body.dataset.view;
+  document.querySelectorAll('.bnav button').forEach(b => b.classList.toggle('on', b.dataset.view === view));
+  const badge = me ? $('#meUnread') : $('#chatCount');
+  $('#navUnread').hidden = badge.hidden;
+  $('#navUnread').textContent = badge.textContent;
+  $('#signin').hidden = !!me;
+  $('#signinErr').hidden = !(token && meMissing);
+  $('#setList').innerHTML = [
+    ['theme', '🌓', 'Тема', darkNow() ? 'Темна' : 'Світла'],
+    ['tz', '🌍', 'Часовий пояс', tz === BASE_TZ ? 'Київ' : `${tzName(tz)} · ${gmt(tz)}`],
+    installEvt && ['install', '📲', 'Встановити як застосунок', ''],
+    me && ['logout', '🚪', 'Вийти з кабінету', me.name],
+    ['teacher', '🎓', $('#login').textContent, ''],
+  ].filter(Boolean).map(([a, i, t, v]) => `<button data-set="${a}"><span>${i}</span><b>${esc(t)}</b><small>${esc(v)}</small><i>›</i></button>`).join('');
+}
+
 function render() {
   const q = $('#search').value.trim().toLowerCase(), v = viewWeek(), memo = {}, on = d => memo[d] ||= slotsOn(d);
   $('#tzLabel').textContent = tz === BASE_TZ ? 'Київський час' : `${tzName(tz)} · ${gmt(tz)}`;
@@ -412,6 +444,7 @@ function render() {
   renderAgenda(q, v, on);
   renderMe();
   if (isTeacher) renderTeacher();
+  renderNav();
 }
 
 // ---------- Кабінет викладача ----------
@@ -1007,6 +1040,29 @@ setInterval(render, 60_000); // оновлює підсвітку поточно
 // ---------- PWA ----------
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js');
 let installEvt;
+$('.bnav').onclick = e => {
+  const b = e.target.closest('[data-view]');
+  if (!b) return;
+  // у викладача чати живуть у його кабінеті
+  if (b.dataset.view === 'chat' && !me && isTeacher) { setView('schedule'); showTab($('#panel .tabs'), 'chats'); return $('#panel').scrollIntoView(); }
+  setView(b.dataset.view);
+};
+$('#setList').onclick = e => {
+  const a = e.target.closest('[data-set]')?.dataset.set;
+  if (a === 'theme') { $('#theme').click(); render(); }
+  if (a === 'tz') $('#tzBtn').click();
+  if (a === 'install') $('#install').click();
+  if (a === 'logout') forget();
+  if (a === 'teacher') $('#login').click();
+};
+$('#signinForm').onsubmit = e => {
+  e.preventDefault();
+  const v = e.target.elements['code'].value.trim();
+  const code = (v.match(/[?&]s=([a-z0-9]+)/i)?.[1] || v).toLowerCase();
+  if (!/^[a-z0-9]{4,32}$/.test(code)) return toast('Перевір код: лише латинські літери й цифри');
+  try { localStorage.setItem('rozklad-login', code); } catch {}
+  location.href = location.pathname + '?s=' + code + '#profile';
+};
 addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; $('#install').hidden = false; });
 $('#install').onclick = () => { installEvt?.prompt(); $('#install').hidden = true; };
 
@@ -1015,8 +1071,12 @@ let token = new URLSearchParams(location.search).get('s');
 // Збережений код підставляємо лише у встановленому застосунку (він стартує без ?s=);
 // у браузері особиста сторінка відкривається тільки за посиланням з ?s=
 const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-try { token ? localStorage.setItem('rozklad-token', token) : standalone && (token = localStorage.getItem('rozklad-token')); } catch {}
+// Плюс код, яким учень сам увійшов через «Профіль», — його пам'ятаємо і в браузері
+try { token ? localStorage.setItem('rozklad-token', token) : token = (standalone && localStorage.getItem('rozklad-token')) || localStorage.getItem('rozklad-login'); } catch {}
 try { meSeen = +localStorage.getItem('rozklad-chat-' + token) || 0; } catch {}
+
+document.body.dataset.view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'schedule';
+if (document.body.dataset.view === 'chat') $('#me .tabs [data-tab="me-chat"]').click();
 
 if (!configured) {
   lessons = { ...SEED };
@@ -1045,6 +1105,8 @@ if (!configured) {
 
       if (token) F.onSnapshot(F.doc(db, 'public', token), d => {
         me = d.exists() ? d.data() : null;
+        meMissing = !d.exists();
+        if (meMissing) try { if (localStorage.getItem('rozklad-login') === token) localStorage.removeItem('rozklad-login'); } catch {}
         if (me && !$('#search').value) $('#search').value = me.name;
         render();
       }, () => {});
