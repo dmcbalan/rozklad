@@ -199,7 +199,7 @@ button.drow:active { background: color-mix(in srgb, var(--acc) 8%, transparent);
 .me-hi p { margin: 2px 0 0; }
 .me-body { display: grid; grid-template-columns: auto 1fr 1.2fr; gap: 24px 32px; align-items: start; }
 .ring { --c: var(--acc); width: 132px; height: 132px; border-radius: 50%; display: grid; place-content: center; text-align: center;
-  background: radial-gradient(closest-side, var(--surf) 80%, transparent 81%), conic-gradient(var(--c) calc(var(--p) * 1%), var(--line) 0); }
+  background: radial-gradient(closest-side, var(--surf) 84%, transparent 85%), conic-gradient(var(--c) calc(var(--p) * 1%), var(--line) 0); }
 .ring.warn { --c: var(--warn); }
 .ring.bad { --c: var(--bad); }
 .ring strong { font-family: Unbounded, sans-serif; font-size: 38px; line-height: 1; }
@@ -352,8 +352,9 @@ dialog h4.sep { margin-top: 22px; }
   .me { padding: 18px 16px; }
   .me-body { grid-template-columns: auto 1fr; }
   .me-hist { grid-column: 1 / -1; }
-  .ring { width: 108px; height: 108px; }
-  .ring strong { font-size: 30px; }
+  .ring { width: 124px; height: 124px; }
+  .ring strong { font-size: 32px; margin-bottom: 3px; }
+  .ring small { font-size: 11px; line-height: 1.25; }
   .panel { padding: 18px 16px; }
   .panel-head { gap: 12px; }
   .panel h2 { font-size: 18px; }

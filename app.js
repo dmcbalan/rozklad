@@ -1328,7 +1328,10 @@ $('#awardGrid').onclick = e => {
 };
 
 // ---------- Сертифікати: викладач позначає завершений курс → сертифікат створюється сам ----------
-const COURSES = ['Scratch', 'Python', 'Веб-розробка: HTML і CSS', 'JavaScript', 'Roblox Studio', 'Minecraft Education', 'Монтаж відео в CapCut', 'Сайти на Wix', 'Дизайн у Figma', 'Canva', "Комп'ютерна грамотність", 'Штучний інтелект'];
+const COURSES = ['Розробка ігор у Scratch', 'Розробка ігор у Roblox Studio', 'Розробка ігор у Kodu Game Lab', 'Розробка ігор у Construct 3',
+  'Відеомонтаж у CapCut', 'Створення сайтів на Wix', 'Створення сайтів на WordPress', 'Створення сайтів: HTML, CSS, JavaScript',
+  'Штучний інтелект', '3D-моделювання в Tinkercad', 'Arduino в Tinkercad', "Комп'ютерна грамотність (базова інформатика)",
+  'Програмування на Python', 'Програмування на C++'];
 $('#courses').innerHTML = COURSES.map(c => `<option value="${esc(c)}">`).join('');
 function openCertIssue(n) {
   const f = $('#certForm'), certs = students[n]?.certs || [];
@@ -1352,7 +1355,7 @@ $('#certForm').onsubmit = e => {
 const certNo = (n, c) => 'BS-' + [...`${n}|${c.course}|${c.date}`].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7).toString(36).toUpperCase().padStart(7, '0');
 function certSvg(n, c) {
   const F1 = "font-family=\"Unbounded, 'Segoe UI', Arial, sans-serif\"", F2 = "font-family=\"Onest, 'Segoe UI', Arial, sans-serif\"";
-  const nameSize = n.length > 22 ? 44 : 60;
+  const nameSize = n.length > 22 ? 44 : 60, len = c.course.length + 2, courseSize = len > 40 ? 26 : len > 30 ? 30 : 36; // довгі назви не вилазять за рамку
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1123 794" width="1123" height="794">
   <defs><linearGradient id="cg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2F6BFF"/><stop offset=".5" stop-color="#7A4DFF"/><stop offset="1" stop-color="#12C2A0"/></linearGradient>
   <radialGradient id="cm" cx=".35" cy=".3"><stop offset="0" stop-color="#FFF3B0"/><stop offset=".6" stop-color="#FFD23F"/><stop offset="1" stop-color="#C98B00"/></radialGradient></defs>
@@ -1368,7 +1371,7 @@ function certSvg(n, c) {
   <text x="561" y="${400 + (60 - nameSize) / 3}" text-anchor="middle" ${F1} font-size="${nameSize}" font-weight="700" fill="#0F1733">${esc(n)}</text>
   <path d="M311 428H811" stroke="#D9DFF5" stroke-width="2"/>
   <text x="561" y="476" text-anchor="middle" ${F2} font-size="24" fill="#4A5578">успішно завершив(ла) курс</text>
-  <text x="561" y="534" text-anchor="middle" ${F1} font-size="36" font-weight="700" fill="#3D5AFE">«${esc(c.course)}»</text>
+  <text x="561" y="534" text-anchor="middle" ${F1} font-size="${courseSize}" font-weight="700" fill="#3D5AFE">«${esc(c.course)}»</text>
   ${c.lessons ? `<text x="561" y="578" text-anchor="middle" ${F2} font-size="20" fill="#4A5578">${c.lessons} ${plural(c.lessons, 'заняття', 'заняття', 'занять')} індивідуально 1:1</text>` : ''}
   <circle cx="561" cy="660" r="48" fill="url(#cm)" stroke="#C98B00" stroke-width="4"/><text x="561" y="676" text-anchor="middle" font-size="44">🎓</text>
   <text x="150" y="650" ${F2} font-size="18" fill="#4A5578">Дата видачі</text>
