@@ -712,3 +712,8 @@ button.medal.on { background: color-mix(in srgb, var(--mint) 12%, transparent); 
 .rate-dlg .fl { text-align: left; }
 .rate-dlg .actions { justify-content: center; }
 #rateDlgSend:disabled { opacity: .5; cursor: default; transform: none; }
+
+.rate-btn { border: 0; border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 700; white-space: nowrap; color: #B87400; background: color-mix(in srgb, #FFB020 16%, var(--surf)); box-shadow: inset 0 0 0 1px color-mix(in srgb, #FFB020 50%, transparent); }
+.rate-btn:hover { background: color-mix(in srgb, #FFB020 28%, var(--surf)); }
+:root[data-theme="dark"] .rate-btn { color: #FFC24D; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .rate-btn { color: #FFC24D; } }
