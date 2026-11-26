@@ -701,3 +701,14 @@ button.medal.on { background: color-mix(in srgb, var(--mint) 12%, transparent); 
 .nr p { margin: 0; }
 .nr .rev-stars { font-size: 16px; margin: 0 6px; }
 .nr blockquote { margin: 6px 0 0; padding: 8px 12px; border-left: 3px solid #FFB020; border-radius: 0 12px 12px 0; background: var(--surf); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ---------- Спливне вікно оцінки уроку ---------- */
+.rate-dlg { text-align: center; }
+.rate-dlg h3 { padding: 0; margin: 8px 0 4px; }
+.rd-face { display: inline-grid; place-items: center; width: 96px; height: 96px; border-radius: 28px; background: radial-gradient(circle at 50% 60%, color-mix(in srgb, var(--acc2) 22%, var(--surf)), var(--surf2)); }
+.stars.big { justify-content: center; margin-top: 12px; }
+.stars.big button { font-size: 46px; }
+.rd-hint { min-height: 1.5em; margin: 4px 0 0; font-weight: 700; }
+.rate-dlg .fl { text-align: left; }
+.rate-dlg .actions { justify-content: center; }
+#rateDlgSend:disabled { opacity: .5; cursor: default; transform: none; }

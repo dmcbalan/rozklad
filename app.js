@@ -1556,16 +1556,63 @@ function reviewsHtml() {
       <b>${esc(nameByToken(x.token))}</b> <small class="muted">урок ${shortDay(x.date)}</small>${x.comment ? `<p>${esc(x.comment)}</p>` : ''}</div>`).join('')}</div>`;
 }
 // Картка оцінки перемальовується лише коли змінюється урок — щоб не стерти обрані зірки й текст
+// Урок, який можна оцінити: щойно минув за розкладом (останні 3 дні) або відмічений «Був» за 7 днів; пропущені — ні
+let meRatingsReady = false;
+function rateCandidate() {
+  const now = Date.now(), today = tzParts(BASE_TZ, now).date, hist = me.history || [], out = [];
+  for (let i = 0; i < 3; i++) {
+    const dt = addDays(today, -i), s = slotsOn(dt);
+    for (const [h, x] of Object.entries(s))
+      if (x.student === me.name && !x.cancelled && instant(dt, h * 60, BASE_TZ) + HOUR <= now) out.push({ date: dt, h: +h });
+  }
+  for (const x of hist) if (x.status === 'present' && x.date >= addDays(today, -7)) out.push({ date: x.date });
+  const missed = d => hist.some(x => x.date === d && x.status !== 'present') && !hist.some(x => x.date === d && x.status === 'present');
+  return out.sort((a, b) => b.date.localeCompare(a.date)).find(x => !meRatings[x.date] && !missed(x.date));
+}
+const RATE_HINT = ['', 'Зовсім не сподобалось 😕', 'Могло бути краще 🤔', 'Нормально 🙂', 'Добре! 😊', 'Супер! 🤩'];
+const starButtons = () => [1, 2, 3, 4, 5].map(i => `<button type="button" data-star="${i}" aria-label="${i} з 5">★</button>`).join('');
+const sendRating = (date, stars, comment) => run(F.setDoc(F.doc(db, 'public', token, 'ratings', date), { stars, comment: comment.trim().slice(0, 300), created: F.serverTimestamp() })
+  .then(() => toast(stars >= 4 ? 'Дякую за відгук! 💙' : 'Дякую! Врахуємо, щоб наступний урок був кращим 💙')));
+// Спливне вікно після уроку — один раз на кожен урок-день
+function askRating(x) {
+  const k = `rozklad-rateask-${token}-${x.date}`;
+  try { if (localStorage.getItem(k)) return; localStorage.setItem(k, 1); } catch { return; }
+  const f = $('#rateForm'), today = tzParts(BASE_TZ, Date.now()).date;
+  f.dataset.date = x.date; f.dataset.v = ''; f.reset();
+  $('#rateFace').innerHTML = avatarSvg(meAv(), myGrowth().lvl, 84);
+  $('#rateTitle').textContent = `Як пройшов урок ${x.date === today ? 'сьогодні' : longDate(x.date)}${x.h !== undefined ? ` о ${hm(tzParts(tz, instant(x.date, x.h * 60, BASE_TZ)).min)}` : ''}?`;
+  $('#rateStars').innerHTML = starButtons();
+  $('#rateHint').textContent = 'Обери від 1 до 5 зірок';
+  $('#rateDlgSend').disabled = true;
+  $('#rateDlg').showModal();
+}
+$('#rateStars').onclick = e => {
+  const b = e.target.closest('[data-star]');
+  if (!b) return;
+  const v = +b.dataset.star;
+  $('#rateForm').dataset.v = v;
+  $('#rateStars').querySelectorAll('[data-star]').forEach(x => x.classList.toggle('on', +x.dataset.star <= v));
+  $('#rateHint').textContent = RATE_HINT[v];
+  $('#rateDlgSend').disabled = false;
+};
+$('#rateForm').onsubmit = e => {
+  e.preventDefault();
+  const f = e.target, v = +f.dataset.v;
+  if (!v || !token || !F) return;
+  sendRating(f.dataset.date, v, f.elements['comment'].value);
+  $('#rateDlg').close();
+};
+
 function renderRate() {
-  const box = $('#rateBox'), today = tzParts(BASE_TZ, Date.now()).date;
-  const x = (me.history || []).find(h => h.status === 'present' && h.date >= addDays(today, -7) && !meRatings[h.date]);
+  const box = $('#rateBox'), x = rateCandidate();
+  if (x && meRatingsReady && !isTeacher && !document.querySelector('dialog[open]')) askRating(x);
   const key = x ? x.date : '';
   if (box.dataset.d === key) return;
   box.dataset.d = key;
   box.dataset.v = '';
   box.hidden = !x;
   box.innerHTML = x ? `<p class="label">⭐ Як тобі урок ${longDate(x.date)}?</p>
-    <div class="stars" role="group" aria-label="Оцінка уроку">${[1, 2, 3, 4, 5].map(i => `<button type="button" data-star="${i}" aria-label="${i} з 5">★</button>`).join('')}</div>
+    <div class="stars" role="group" aria-label="Оцінка уроку">${starButtons()}</div>
     <div class="rate-more" hidden><input id="rateText" maxlength="300" placeholder="Що сподобалось або що покращити (необов'язково)" aria-label="Коментар"><button class="btn sm" id="rateSend">Надіслати</button></div>` : '';
 }
 $('#rateBox').onclick = e => {
@@ -1577,8 +1624,7 @@ $('#rateBox').onclick = e => {
     return;
   }
   if (!e.target.closest('#rateSend') || !+box.dataset.v || !token || !F) return;
-  run(F.setDoc(F.doc(db, 'public', token, 'ratings', box.dataset.d), { stars: +box.dataset.v, comment: $('#rateText').value.trim().slice(0, 300), created: F.serverTimestamp() })
-    .then(() => toast('Дякую за відгук! 💙')));
+  sendRating(box.dataset.d, +box.dataset.v, $('#rateText').value);
 };
 
 // ---------- Портфоліо: публічна сторінка ?p=код (окремий від коду кабінету, тож нею можна ділитися) ----------
@@ -1748,7 +1794,7 @@ if (!configured) {
       mine('spins', m => meSpins = m);
       mine('notifs', m => meNotifs = m);
       mine('avatar', m => meAvatar = m.me || {});
-      mine('ratings', m => meRatings = m);
+      mine('ratings', m => { meRatings = m; meRatingsReady = true; });
       // «я в мережі»: раз на хвилину, поки кабінет відкритий на екрані
       const beat = () => token && me && document.visibilityState === 'visible'
         && F.setDoc(F.doc(db, 'public', token, 'presence', 'me'), { at: F.serverTimestamp() }).catch(() => {});
