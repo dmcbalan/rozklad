@@ -693,3 +693,11 @@ button.medal.on { background: color-mix(in srgb, var(--mint) 12%, transparent); 
 /* ---------- В мережі / не в мережі ---------- */
 .online { display: inline-block; width: 10px; height: 10px; margin-left: 6px; border-radius: 50%; vertical-align: 1px; background: var(--bad); box-shadow: 0 0 0 2px var(--surf); }
 .online.on { background: var(--ok); box-shadow: 0 0 0 2px var(--surf), 0 0 0 5px color-mix(in srgb, var(--ok) 25%, transparent); }
+
+/* ---------- Нові відгуки в кабінеті викладача ---------- */
+.new-revs { margin: -6px 0 18px; padding: 14px 16px; border-radius: 18px; background: color-mix(in srgb, #FFB020 10%, var(--surf)); box-shadow: inset 0 0 0 1px color-mix(in srgb, #FFB020 45%, transparent); }
+.nr-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+.nr { display: grid; grid-template-columns: 40px 1fr; gap: 12px; align-items: start; padding: 10px 0; border-top: 1px dashed color-mix(in srgb, #FFB020 35%, transparent); }
+.nr p { margin: 0; }
+.nr .rev-stars { font-size: 16px; margin: 0 6px; }
+.nr blockquote { margin: 6px 0 0; padding: 8px 12px; border-left: 3px solid #FFB020; border-radius: 0 12px 12px 0; background: var(--surf); white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -564,6 +564,7 @@ function renderTeacher() {
   renderRequests();
   renderChats();
   renderSubs();
+  renderNewRevs();
   if ($('#awardDlg').open) openAwards($('#awardDlg').dataset.name);
   syncPublic(recs, rem);
 }
@@ -1529,11 +1530,29 @@ const shortDay = d => parseIso(d).toLocaleDateString('uk', { day: 'numeric', mon
 const avgRating = list => ({ rate: list.length ? list.reduce((a, x) => a + x.stars, 0) / list.length : 0, rated: list.length });
 console.assert(avgRating([{ stars: 5 }, { stars: 4 }]).rate === 4.5 && avgRating([]).rate === 0, 'avgRating()');
 const rateOf = (n, date) => ratings[`${date}@${students[n]?.token}`];
+const starsHtml = n => `<span class="rev-stars" aria-label="${n} з 5">${'★'.repeat(n)}<i>${'★'.repeat(5 - n)}</i></span>`;
+const revSeen = () => { try { return +localStorage.getItem('rozklad-rev-seen') || 0; } catch { return 0; } };
+function renderNewRevs() {
+  const list = Object.values(ratings).filter(x => ms(x.created) > revSeen()).sort((a, b) => ms(b.created) - ms(a.created));
+  const box = $('#newRevs');
+  box.hidden = !list.length;
+  if (!list.length) return;
+  box.innerHTML = `<div class="nr-head"><b>⭐ ${list.length === 1 ? 'Новий відгук' : `Нові відгуки · ${list.length}`}</b><button class="ghost link-btn" data-revseen>Прочитано ✓</button></div>
+    ${list.slice(0, 5).map(x => { const n = nameByToken(x.token); return `<div class="nr">${faceOf(n)}<div>
+      <p><b>${esc(n)}</b> ${starsHtml(x.stars)} <small class="muted">урок ${shortDay(x.date)} · ${new Date(ms(x.created)).toLocaleString('uk', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</small></p>
+      ${x.comment ? `<blockquote>${esc(x.comment)}</blockquote>` : '<small class="muted">без коментаря</small>'}</div></div>`; }).join('')}
+    ${list.length > 5 ? `<p class="muted small">Ще ${list.length - 5} — у «Статистиці»</p>` : ''}`;
+}
+$('#newRevs').onclick = e => {
+  if (!e.target.closest('[data-revseen]')) return;
+  try { localStorage.setItem('rozklad-rev-seen', Math.max(...Object.values(ratings).map(x => ms(x.created)), Date.now())); } catch {}
+  render();
+};
 function reviewsHtml() {
   const all = Object.values(ratings).sort((a, b) => b.date.localeCompare(a.date) || ms(b.created) - ms(a.created)), a = avgRating(all);
   if (!all.length) return '<h4 class="sep">Відгуки учнів</h4><p class="empty">Ще немає відгуків. Учні оцінюють урок у кабінеті після відмітки «Був».</p>';
   return `<h4 class="sep">Відгуки учнів · загалом ★ ${a.rate.toFixed(1)} (${a.rated})</h4>
-    <div class="reviews">${all.slice(0, 8).map(x => `<div class="rev"><span class="rev-stars">${'★'.repeat(x.stars)}<i>${'★'.repeat(5 - x.stars)}</i></span>
+    <div class="reviews">${all.slice(0, 8).map(x => `<div class="rev">${starsHtml(x.stars)}
       <b>${esc(nameByToken(x.token))}</b> <small class="muted">урок ${shortDay(x.date)}</small>${x.comment ? `<p>${esc(x.comment)}</p>` : ''}</div>`).join('')}</div>`;
 }
 // Картка оцінки перемальовується лише коли змінюється урок — щоб не стерти обрані зірки й текст
