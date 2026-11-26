@@ -1202,7 +1202,7 @@ $('#wheelDisc').innerHTML = (() => {
   return `<svg viewBox="-100 -100 200 200">${PRIZES.map((p, i) => {
     const a0 = i / n * 2 * Math.PI - Math.PI / 2, a1 = (i + 1) / n * 2 * Math.PI - Math.PI / 2, am = (a0 + a1) / 2, [x, y] = pt(64, am).split(' ');
     return `<path d="M0 0L${pt(96, a0)}A96 96 0 0 1 ${pt(96, a1)}Z" fill="${col[i]}"/>
-      <text x="${x}" y="${y}" transform="rotate(${am * 180 / Math.PI + 90} ${x} ${y})" text-anchor="middle" dominant-baseline="central">${p.s}</text>`;
+      <text x="${x}" y="${y}" transform="rotate(${am * 180 / Math.PI + (Math.sin(am) > 0.01 ? 270 : 90)} ${x} ${y})" text-anchor="middle" dominant-baseline="central">${p.s}</text>`;
   }).join('')}<circle r="96" fill="none" stroke="#fff" stroke-width="4"/><circle r="15" fill="#fff"/></svg>`;
 })();
 const wheelAngle = i => 360 - (i + .5) * 360 / PRIZES.length; // сектор i під стрілкою зверху

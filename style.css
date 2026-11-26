@@ -546,6 +546,7 @@ dialog.wide { width: min(760px, calc(100vw - 32px)); }
   background: linear-gradient(90deg, var(--acc) 0 34%, var(--hi) 34% 66%, var(--acc2) 66%); clip-path: polygon(0 0, 100% 0, 80% 100%, 50% 80%, 20% 100%); }
 .medal b { font-weight: 600; line-height: 1.2; }
 .medal.lock i { filter: grayscale(1); opacity: .3; }
+.medal.lock i::before { display: none; }
 .medal.lock b { color: var(--mute); font-weight: 500; }
 button.medal { cursor: pointer; border-radius: 14px; }
 button.medal:hover { background: var(--bg); }
