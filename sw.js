@@ -10,3 +10,9 @@ self.addEventListener('fetch', e => {
       .catch(() => caches.match(e.request, { ignoreSearch: true }))
   );
 });
+// Натискання на системне сповіщення — відкрити (або показати) сайт
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true })
+    .then(list => list.length ? list[0].focus() : clients.openWindow('./')));
+});

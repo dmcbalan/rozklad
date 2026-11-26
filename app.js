@@ -23,7 +23,38 @@ console.assert(remaining(8, [{ status: 'present' }, { status: 'absent' }, { stat
 
 const MEET = 'https://meet.google.com/fyx-nwim-wno'; // одне посилання для всіх уроків
 // Значки, які викладач видає вручну
-const BADGES = ['Перший проєкт 🚀', 'Своя гра 🎮', 'Свій сайт 🌐', 'Python-майстер 🐍', 'Креатив 🎨', 'Старанність ⭐', 'Монтажер 🎬', 'Дизайнер 🖌️'];
+// Медалі: [назва, емодзі, рівень: b — бронза, s — срібло, g — золото, p — особлива, розділ]. Рядок «назва емодзі» — id у базі.
+const MEDALS = [
+  ['Перший проєкт', '🚀', 'b', 'Курси'], ['Своя гра', '🎮', 's', 'Курси'], ['Свій сайт', '🌐', 's', 'Курси'], ['Python-майстер', '🐍', 'g', 'Курси'],
+  ['Креатив', '🎨', 'b', 'Курси'], ['Монтажер', '🎬', 's', 'Курси'], ['Дизайнер', '🖌️', 's', 'Курси'], ['Аніматор', '🎞️', 's', 'Курси'],
+  ['Робототехнік', '🤖', 'g', 'Курси'], ['3D-творець', '🧊', 's', 'Курси'], ['ШІ-дослідник', '🧠', 'g', 'Курси'],
+  ['Логік', '🧩', 'b', 'Навички'], ['Дебагер', '🐞', 's', 'Навички'], ['Швидкі пальці', '⌨️', 'b', 'Навички'], ['Алгоритміст', '🔢', 'g', 'Навички'],
+  ['Презентація', '🎤', 's', 'Навички'], ['Англійська в коді', '🔤', 'b', 'Навички'], ['Самостійність', '🧭', 's', 'Навички'],
+  ['Старанність', '⭐', 's', 'Характер'], ['Наполегливість', '🧗', 'g', 'Характер'], ['Допитливість', '🔍', 'b', 'Характер'], ['Пунктуальність', '⏰', 'b', 'Характер'],
+  ['Креативна ідея', '💡', 's', 'Характер'], ['Допомога іншим', '🤝', 's', 'Характер'], ['Сміливість', '🦸', 'g', 'Характер'], ['Великий прогрес', '📈', 'g', 'Характер'],
+  ['Ідеальне ДЗ', '✅', 's', 'Характер'],
+  ['Учень місяця', '👑', 'p', 'Особливі'], ['Олімпіада', '🥇', 'p', 'Особливі'], ['Хакатон', '🏁', 'p', 'Особливі'], ['Річниця навчання', '🎂', 'g', 'Особливі'],
+  ['Привів друга', '🎟️', 'g', 'Особливі'], ['Друг Balan Study', '💙', 's', 'Особливі'],
+  ['Перший урок', '🎉', 'b', 'Автоматичні'], ['10 уроків', '💪', 'b', 'Автоматичні'], ['25 уроків', '🏅', 's', 'Автоматичні'], ['50 уроків', '🏆', 'g', 'Автоматичні'],
+  ['100 уроків', '👑', 'p', 'Автоматичні'], ['Серія 5', '🔥', 's', 'Автоматичні'], ['Серія 10', '⚡', 'g', 'Автоматичні'], ['Перше ДЗ', '📬', 'b', 'Автоматичні'],
+  ['10 ДЗ', '📚', 'g', 'Автоматичні'], ['Рівень 5', '🌟', 's', 'Автоматичні'], ['Рівень 10', '💎', 'p', 'Автоматичні'], ['Щасливчик', '🍀', 's', 'Автоматичні'],
+  ['Випускник', '🎓', 'g', 'Автоматичні'],
+];
+const MEDAL = Object.fromEntries(MEDALS.map(([n, e, t, c]) => [`${n} ${e}`, { n, e, t, c }]));
+const BADGES = MEDALS.filter(m => m[3] !== 'Автоматичні').map(([n, e]) => `${n} ${e}`); // ті, що видає викладач
+const medalOf = s => MEDAL[s] || { n: s.replace(/\s*\S+$/, '') || s, e: s.split(' ').pop(), t: 'b', c: 'Інші' };
+const isManual = b => MEDAL[b]?.c !== 'Автоматичні';
+// Колесо фортуни: раз на тиждень, якщо за останні 7 днів був урок. s — підпис на колесі, w — вага (шанс)
+const PRIZES = [
+  { s: '+10', t: '+10 XP', xp: 10, w: 22 }, { s: '+25', t: '+25 XP', xp: 25, w: 15 }, { s: '🎯', t: 'Тема уроку на вибір 🎯', w: 9 }, { s: '+15', t: '+15 XP', xp: 15, w: 20 },
+  { s: '+50', t: '+50 XP', xp: 50, w: 6 }, { s: '⏱', t: '+10 хв до уроку ⏱', w: 9 }, { s: '🍀', t: 'Медаль «Щасливчик» 🍀 і +20 XP', xp: 20, lucky: true, w: 8 }, { s: '🎁', t: 'Сюрприз від викладача 🎁', w: 11 },
+];
+// Рівень: 1→2 потрібно 100 XP, далі кожен рівень на 50 XP довший
+function levelOf(xp) { let lvl = 1, need = 100, rest = xp; while (rest >= need) { rest -= need; lvl++; need += 50; } return { lvl, rest, need }; }
+console.assert(levelOf(0).lvl === 1 && levelOf(100).lvl === 2 && levelOf(249).lvl === 2 && levelOf(250).lvl === 3, 'levelOf()');
+const RANKS = ['Новачок', 'Учень', 'Дослідник', 'Винахідник', 'Майстер', 'Експерт', 'Гуру', 'Легенда'];
+const rank = lvl => RANKS[Math.min(RANKS.length - 1, Math.floor((lvl - 1) / 2))];
+const XP = { lesson: 10, hw: 15, medal: 5 };
 const plural = (n, one, few, many) => { const m = Math.abs(n) % 100, k = m % 10; return m > 10 && m < 20 ? many : k === 1 ? one : k >= 2 && k <= 4 ? few : many; };
 console.assert(plural(1, 'а', 'б', 'в') === 'а' && plural(3, 'а', 'б', 'в') === 'б' && plural(11, 'а', 'б', 'в') === 'в' && plural(22, 'а', 'б', 'в') === 'б', 'plural()');
 // Серія = уроки «Був» поспіль; «Пропустив» обнуляє, «Перенесено» не впливає
@@ -36,10 +67,23 @@ function progress(recs) {
   }
   return { present, streak, best };
 }
-const autoBadges = ({ present, best }) => [
+const autoBadges = ({ present, best, hwOk = 0, lucky = false, certs = 0, lvl = 1 }) => [
   ...[[1, 'Перший урок 🎉'], [10, '10 уроків 💪'], [25, '25 уроків 🏅'], [50, '50 уроків 🏆'], [100, '100 уроків 👑']].filter(([n]) => present >= n),
   ...[[5, 'Серія 5 🔥'], [10, 'Серія 10 ⚡']].filter(([n]) => best >= n),
+  ...[[1, 'Перше ДЗ 📬'], [10, '10 ДЗ 📚']].filter(([n]) => hwOk >= n),
+  ...[[5, 'Рівень 5 🌟'], [10, 'Рівень 10 💎']].filter(([n]) => lvl >= n),
+  ...(lucky ? [[0, 'Щасливчик 🍀']] : []), ...(certs ? [[0, 'Випускник 🎓']] : []),
 ].map(x => x[1]);
+// Рівень і всі медалі учня: відвідування, зараховані ДЗ, медалі від викладача, бонуси колеса
+function growth({ present = 0, best = 0, manual = [], subsList = [], spinsList = [], certs = [] }) {
+  const hwOk = subsList.filter(x => x.status === 'ok').length;
+  const bonus = spinsList.reduce((a, x) => a + (PRIZES[x.prize]?.xp || 0), 0);
+  const xp = present * XP.lesson + hwOk * XP.hw + manual.length * XP.medal + bonus;
+  const lv = levelOf(xp);
+  const auto = autoBadges({ present, best, hwOk, lucky: spinsList.some(x => PRIZES[x.prize]?.lucky), certs: certs.length, lvl: lv.lvl });
+  return { xp, hwOk, ...lv, medals: [...new Set([...manual, ...auto])] };
+}
+console.assert(growth({ present: 10, manual: ['Логік 🧩'], subsList: [{ status: 'ok' }, { status: 'new' }], spinsList: [{ prize: 6 }] }).xp === 100 + 15 + 5 + 20, 'growth()');
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
@@ -91,6 +135,8 @@ try { const t = localStorage.getItem('rozklad-tz'); if (t && validTz(t)) tz = no
 
 const configured = !!(window.FIREBASE_CONFIG && FIREBASE_CONFIG.projectId);
 let lessons = {}, changes = {}, students = {}, attendance = {}, payments = {}, requests = {}, notes = {}, photos = {}, mePhotos = {}, msgs = {}, meMsgs = {};
+// ДЗ на перевірку, колесо, персонажі, сповіщення (subs/spins/avatars — у викладача по всіх учнях, me* — в учня свої)
+let subs = {}, spins = {}, avatars = {}, meSubs = {}, meSpins = {}, meNotifs = {}, meAvatar = {};
 const imgCache = {}; // id фото → data URL
 let isTeacher = false, db, F, me = null;
 let week = addDays(iso(new Date()), -dayIdx(new Date())); // понеділок поточного тижня
@@ -232,9 +278,9 @@ function renderMe() {
     ? `<a class="btn join" href="${MEET}" target="_blank" rel="noopener">🎥 ${mins > 0 ? `Приєднатися · старт через ${Math.ceil(mins)} хв` : 'Приєднатися до уроку'}</a>`
     : next ? `<p class="muted small">Кнопка входу на урок з'явиться тут за 10 хв до початку</p>` : '';
   const hw = (me.notes || []).find(x => x.homework), last = (me.notes || [])[0];
-  const badges = me.badges || [];
+  const g = myGrowth();
   $('#meHi').innerHTML = `
-    <span class="avatar big" style="--h:${hue(me.name)}">${esc(me.name[0])}</span>
+    <span class="av-face">${avatarSvg(meAv(), g.lvl, 56)}</span>
     <div><h2>Привіт, ${esc(me.name)}!</h2><p class="muted">Твій кабінет учня</p></div>
     <button class="x" id="forget" title="Це не я" aria-label="Закрити кабінет">✕</button>`;
   $('#meMain').innerHTML = `
@@ -264,10 +310,11 @@ function renderMe() {
         ${last && last !== hw && last.topic ? `<p class="muted small">Останній урок (${longDate(last.date)}): ${esc(last.topic)}</p>` : ''}
       </div>
       <div class="awards">
-        <p class="label">🏆 Мої нагороди</p>
+        <p class="label">🏆 Мій рівень</p>
+        ${lvlHtml(g)}
         ${me.streak ? `<p class="streak">🔥 <b>${me.streak}</b> ${plural(me.streak, 'урок', 'уроки', 'уроків')} поспіль без пропусків</p>` : ''}
-        ${badges.length ? `<div class="bdgs">${badges.map(b => `<span class="bdg">${esc(b)}</span>`).join('')}</div>`
-          : '<p class="muted small">Перша нагорода — після першого уроку 🎉</p>'}
+        ${g.medals.length ? `<div class="medals">${g.medals.slice(-6).map(b => medalHtml(b, 'mini')).join('')}</div>`
+          : '<p class="muted small">Перша медаль — після першого уроку 🎉</p>'}
       </div>
     </div>`;
   $('#meLessons').innerHTML = `<div class="me-hist">
@@ -279,12 +326,19 @@ function renderMe() {
       ${histList(me.history || [])}
     </div>`;
   const ns = me.notes || [];
-  $('#meHw').innerHTML = ns.length ? ns.map(x => `<div class="hw-item">
+  $('#meHw').innerHTML = ns.length ? ns.map(x => {
+    const mine = Object.values(meSubs).filter(y => y.hw === x.date).sort((a, b) => ms(a.created) - ms(b.created)), lastSub = mine.at(-1);
+    return `<div class="hw-item">
       <p class="muted small"><b>${longDate(x.date)}</b>${x.topic ? ' · тема: ' + esc(x.topic) : ''}</p>
-      ${x.homework ? `<p class="hw-text">${esc(x.homework)}</p>` : '<p class="muted small">Без домашнього завдання</p>'}</div>`).join('')
+      ${x.homework ? `<p class="hw-text">${esc(x.homework)}</p>` : '<p class="muted small">Без домашнього завдання</p>'}
+      ${mine.map(subLine).join('')}
+      ${x.homework && (!lastSub || lastSub.status === 'redo') ? `<button class="btn sm" data-submit="${x.date}">📤 ${lastSub ? 'Надіслати ще раз' : 'Здати ДЗ'}</button>` : ''}</div>`;
+  }).join('')
     : '<p class="muted">Тут з\'являться теми уроків і домашні завдання</p>';
   $('#forget').onclick = forget;
   renderMeChat();
+  renderAwards(g);
+  renderAvatarTab(g);
   renderPhotoGrid($('#photoGrid'), token, mePhotos, false);
 }
 
@@ -329,7 +383,7 @@ function renderChats() {
   $('#chatCount').textContent = total;
   if (!people.some(p => p.n === chatName)) chatName = people[0]?.n || null;
   $('#chatList').innerHTML = people.length ? people.map(p => `<button class="chat-item${p.n === chatName ? ' on' : ''}" data-chat="${esc(p.n)}">
-      <span class="avatar" style="--h:${hue(p.n)}">${esc(p.n[0])}</span>
+      ${faceOf(p.n)}
       <span><b>${esc(p.n)}</b><small>${p.last ? (p.last.by === 'teacher' ? 'Ви: ' : '') + esc(p.last.text) : 'Ще немає повідомлень'}</small></span>
       ${p.unread ? `<b class="n">${p.unread}</b>` : ''}</button>`).join('')
     : '<p class="empty">Чат з\'являється, коли в учня є кабінет: «Учні» → «+ Кабінет учня».</p>';
@@ -407,26 +461,47 @@ function forget() {
 }
 
 // ---------- Нижнє меню на телефоні: екрани Розклад / Чат / Профіль / Налаштування ----------
-const VIEWS = ['schedule', 'chat', 'profile', 'settings'];
-let meMissing = false;
+// Екран у викладача: 'tab:marks' — його кабінет з однією вкладкою на весь екран
+const VIEWS = ['schedule', 'chat', 'profile', 'settings', 'tab:marks', 'tab:students', 'tab:chats', 'tab:hw', 'tab:stats', 'tab:requests'];
+let meMissing = false, curView = 'schedule';
 function setView(v) {
-  document.body.dataset.view = v;
+  curView = v;
+  document.body.dataset.view = v.startsWith('tab:') ? 'tab' : v;
   history.replaceState(null, '', location.pathname + location.search + (v === 'schedule' ? '' : '#' + v));
   const tl = $('#me .tabs');
-  if (v === 'chat') showTab(tl, 'me-chat');
+  if (v.startsWith('tab:')) showTab($('#panel .tabs'), v.slice(4));
+  else if (v === 'chat') showTab(tl, 'me-chat');
   else if (v === 'profile' && !$('#tab-me-chat').hidden) showTab(tl, 'me-home');
   else render();
   scrollTo(0, 0);
 }
+const NAV_ICON = {
+  cal: '<rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+  chat: '<path d="M20 12a8 8 0 0 1-11.8 7L4 20l1-4.2A8 8 0 1 1 20 12Z"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  gear: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
+  check: '<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="m8 12 3 3 5-6"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/>',
+  more: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
+};
+const cnt = id => $(id).hidden ? 0 : +$(id).textContent || 0;
 function renderNav() {
-  const view = document.body.dataset.view;
-  document.querySelectorAll('.bnav button').forEach(b => b.classList.toggle('on', b.dataset.view === view));
-  const badge = me ? $('#meUnread') : $('#chatCount');
-  $('#navUnread').hidden = badge.hidden;
-  $('#navUnread').textContent = badge.textContent;
-  $('#signin').hidden = !!me;
+  const teacherNav = isTeacher && !me;
+  const items = teacherNav
+    ? [['schedule', 'cal', 'Розклад'], ['tab:marks', 'check', 'Відмітки'], ['tab:students', 'users', 'Учні'], ['tab:chats', 'chat', 'Чати', cnt('#chatCount')],
+       ['settings', 'more', 'Ще', cnt('#hwCount') + cnt('#reqCount')]]
+    : [['schedule', 'cal', 'Розклад'], ['chat', 'chat', 'Чат', cnt('#meUnread')], ['profile', 'user', 'Профіль'], ['settings', 'gear', 'Налаштування']];
+  const active = ['tab:hw', 'tab:stats', 'tab:requests'].includes(curView) ? 'settings' : curView;
+  $('.bnav').innerHTML = items.map(([v, i, t, n]) => `<button data-view="${v}"${v === active ? ' class="on"' : ''}><svg viewBox="0 0 24 24">${NAV_ICON[i]}</svg>${t}${n ? `<b>${n}</b>` : ''}</button>`).join('');
+  $('#signin').hidden = !!me || teacherNav;
   $('#signinErr').hidden = !(token && meMissing);
+  $('#setTitle').textContent = teacherNav ? 'Ще' : 'Налаштування';
+  const perm = 'Notification' in window ? { granted: 'увімкнено', denied: 'заблоковано в браузері' }[Notification.permission] || 'вимкнено' : 'не підтримується';
   $('#setList').innerHTML = [
+    teacherNav && ['go:tab:hw', '📬', 'ДЗ на перевірку', cnt('#hwCount') ? `нових ${cnt('#hwCount')}` : ''],
+    teacherNav && ['go:tab:requests', '📝', 'Заявки', cnt('#reqCount') ? `нових ${cnt('#reqCount')}` : ''],
+    teacherNav && ['go:tab:stats', '📊', 'Статистика', ''],
+    ['notif', '🔔', 'Сповіщення на пристрої', perm],
     ['theme', '🌓', 'Тема', darkNow() ? 'Темна' : 'Світла'],
     ['tz', '🌍', 'Часовий пояс', tz === BASE_TZ ? 'Київ' : `${tzName(tz)} · ${gmt(tz)}`],
     installEvt && ['install', '📲', 'Встановити як застосунок', ''],
@@ -445,6 +520,7 @@ function render() {
   renderMe();
   if (isTeacher) renderTeacher();
   renderNav();
+  renderBell();
 }
 
 // ---------- Кабінет викладача ----------
@@ -468,6 +544,8 @@ function renderTeacher() {
   renderStats();
   renderRequests();
   renderChats();
+  renderSubs();
+  if ($('#awardDlg').open) openAwards($('#awardDlg').dataset.name);
   syncPublic(recs, rem);
 }
 
@@ -526,20 +604,23 @@ function renderStudents(recs, rem) {
     const pr = progress(recs[n] || []);
     const myPhotos = st.token ? Object.values(photos).filter(p => p.token === st.token) : [];
     const fresh = myPhotos.filter(p => ms(p.created) > (st.seenPhotos || 0)).length;
+    const g = growthOf(n, recs), spin = st.token && Object.values(spins).find(x => x.token === st.token && x.week === weekKey());
     return `<article class="stu${r <= 0 ? ' over' : r <= 3 ? ' low' : ''}">
-      <span class="avatar" style="--h:${hue(n)}">${esc(n[0])}</span>
+      ${faceOf(n, g.lvl)}
       <div class="info">
-        <b>${esc(n)}</b>${pr.streak >= 3 ? ` <span class="streak-mini" title="Уроків поспіль без пропусків">🔥${pr.streak}</span>` : ''}
+        <b>${esc(n)}</b> <span class="lvl-chip" title="${g.xp} XP">рів. ${g.lvl}</span>${pr.streak >= 3 ? ` <span class="streak-mini" title="Уроків поспіль без пропусків">🔥${pr.streak}</span>` : ''}
         <small>${sched(n) || 'немає в розкладі'}</small>
         <div class="dots" aria-label="Останні уроки">${last.map(x => `<i class="${x.status}" title="${longDate(x.date)} · ${LABEL[x.status]}"></i>`).join('')}</div>
-        <div class="bdgs sm">${(st.badges || []).map(b => `<button class="bdg" data-unbadge="${esc(b)}" data-name="${esc(n)}" title="Забрати значок">${esc(b)} ✕</button>`).join('')}
-          <select class="bdg-add" data-badge="${esc(n)}" aria-label="Видати значок"><option value="">+ значок</option>${BADGES.filter(b => !(st.badges || []).includes(b)).map(b => `<option>${esc(b)}</option>`).join('')}</select></div>
+        <div class="medals">${g.medals.map(b => medalHtml(b, 'mini')).join('')}</div>
+        ${spin ? `<small>🎡 Колесо цього тижня: <b>${esc(PRIZES[spin.prize]?.t || '')}</b></small>` : ''}
       </div>
       <div class="rem"><strong>${r}</strong><small>з ${st.paid || 0} оплачених</small></div>
       <div class="stu-actions">
         <div class="packs">${PACKS.map((p, i) => `<button class="pack" data-pack="${i}" data-name="${esc(n)}"><b>+${p.n}</b> ${money(p.sum)}</button>`).join('')}</div>
         ${r <= 3 && (st.paid || 0) > 0 ? `<button class="ghost link-btn warnbtn" data-msg="remind" data-name="${esc(n)}">💬 Нагадування</button>` : ''}
         <button class="ghost link-btn" data-msg="report" data-name="${esc(n)}">📊 Звіт</button>
+        <button class="ghost link-btn" data-awards="${esc(n)}">🏅 Медалі</button>
+        <button class="ghost link-btn" data-cert="${esc(n)}">🎓 Сертифікат${(st.certs || []).length ? ` · ${st.certs.length}` : ''}</button>
         ${st.token ? `<button class="ghost link-btn" data-chatwith="${esc(n)}">💬 Чат</button>` : ''}
         ${myPhotos.length ? `<button class="ghost link-btn${fresh ? ' fresh' : ''}" data-photos="${esc(n)}">📷 ${myPhotos.length}${fresh ? ` · нових ${fresh}` : ''}</button>` : ''}
         ${st.token
@@ -666,7 +747,7 @@ function syncPublic(recs, rem) {
     const data = { name: n, paid: st.paid || 0, remaining: rem(n),
       history: (recs[n] || []).slice(0, 30).map(x => ({ date: x.date, status: x.status, kind: x.kind || 'regular' })),
       notes: notesOf(n).slice(0, 20).map(x => ({ date: x.date, topic: x.topic || '', homework: x.homework || '' })),
-      streak: pr.streak, present: pr.present, badges: [...autoBadges(pr), ...(st.badges || [])] };
+      streak: pr.streak, present: pr.present, best: pr.best, badges: st.badges || [], certs: st.certs || [] };
     const json = JSON.stringify(data);
     if (synced[st.token] === json) continue;
     synced[st.token] = json;
@@ -936,6 +1017,7 @@ $('#noteForm').onsubmit = e => {
   const f = e.target, n = f.dataset.name, date = f.dataset.date;
   const topic = f.elements['topic'].value.trim(), homework = f.elements['homework'].value.trim();
   const ref = F.doc(db, 'notes', `${date}_${n}`);
+  if (homework && homework !== notes[`${date}_${n}`]?.homework) notifyStudent(n, 'hw', `Нове домашнє завдання: ${homework}`);
   $('#noteDlg').close();
   run((topic || homework ? F.setDoc(ref, { student: n, date, topic, homework }) : F.deleteDoc(ref)).then(() => toast('Нотатку збережено')));
 };
@@ -984,13 +1066,6 @@ $('#students').onsubmit = e => {
   f.reset();
 };
 
-$('#students').onchange = e => {
-  const s = e.target.closest('select[data-badge]');
-  if (!s || !s.value) return;
-  run(F.setDoc(F.doc(db, 'students', s.dataset.badge), { badges: F.arrayUnion(s.value) }, { merge: true })
-    .then(() => toast(`${s.dataset.badge} отримує значок ${s.value}`)));
-};
-
 $('#students').onclick = async e => {
   const pk = e.target.closest('[data-pack]');
   if (pk) return pay(pk.dataset.name, PACKS[pk.dataset.pack].n, PACKS[pk.dataset.pack].sum);
@@ -999,8 +1074,10 @@ $('#students').onclick = async e => {
     const n = msg.dataset.name;
     return copyText(msg.dataset.msg === 'remind' ? msgRemind(n) : msgReport(n), `Повідомлення для ${n} скопійовано — встав у Telegram/Viber`);
   }
-  const ub = e.target.closest('[data-unbadge]');
-  if (ub) return run(F.setDoc(F.doc(db, 'students', ub.dataset.name), { badges: F.arrayRemove(ub.dataset.unbadge) }, { merge: true }));
+  const aw = e.target.closest('[data-awards]');
+  if (aw) return openAwards(aw.dataset.awards);
+  const ce = e.target.closest('[data-cert]');
+  if (ce) return openCertIssue(ce.dataset.cert);
   const cw = e.target.closest('[data-chatwith]');
   if (cw) { chatName = cw.dataset.chatwith; return showTab($('#panel .tabs'), 'chats'); }
   const ph = e.target.closest('[data-photos]');
@@ -1037,6 +1114,370 @@ $('#seed').onclick = () => {
 
 setInterval(render, 60_000); // оновлює підсвітку поточної години
 
+// ---------- Рівні й медалі ----------
+const myGrowth = () => growth({ present: me.present || 0, best: me.best || 0, manual: (me.badges || []).filter(isManual),
+  subsList: Object.values(meSubs), spinsList: Object.values(meSpins), certs: me.certs || [] });
+function growthOf(n, recs) {
+  const st = students[n] || {}, tok = st.token, pr = progress(recs[n] || []);
+  return growth({ present: pr.present, best: pr.best, manual: st.badges || [], certs: st.certs || [],
+    subsList: tok ? Object.values(subs).filter(x => x.token === tok) : [], spinsList: tok ? Object.values(spins).filter(x => x.token === tok) : [] });
+}
+const lvlHtml = g => `<div class="lvl"><b>${g.lvl}</b><div><span><b>${rank(g.lvl)}</b> · ${g.xp} XP</span>
+  <div class="xpbar"><i style="width:${g.rest / g.need * 100}%"></i></div><small class="muted">до рівня ${g.lvl + 1}: ${g.need - g.rest} XP</small></div></div>`;
+const medalHtml = (b, cls = '', tag = 'span', attrs = '') => {
+  const m = medalOf(b);
+  return `<${tag} class="medal t-${m.t} ${cls}" title="${esc(m.n)}"${attrs}><i>${m.e}</i>${cls.includes('mini') ? '' : `<b>${esc(m.n)}</b>`}</${tag}>`;
+};
+const weekKey = () => { const t = tzParts(BASE_TZ, Date.now()).date; return addDays(t, -dayIdx(parseIso(t))); };
+
+// ---------- Персонаж: SVG, речі відкриваються з рівнями ----------
+const AV = {
+  kind: [['blob', 'Круглик', 1], ['cat', 'Котик', 1], ['robot', 'Робот', 4]],
+  color: [['#3D5AFE', '', 1], ['#0FB48F', '', 1], ['#E0408A', '', 1], ['#FFB020', '', 1], ['#9B5CFF', '', 3], ['#12C2A0', '', 3], ['#FF6B3D', '', 5], ['#1E293B', '', 7], ['#E8B923', '', 9]],
+  head: [['none', 'Нічого', 1], ['cap', 'Кепка', 2], ['phones', 'Навушники', 4], ['wizard', 'Капелюх мага', 6], ['crown', 'Корона', 10]],
+  face: [['none', 'Нічого', 1], ['glasses', 'Окуляри', 3], ['shades', 'Темні окуляри', 5], ['mask', 'Маска героя', 8]],
+  back: [['none', 'Нічого', 1], ['cape', 'Плащ', 4], ['wings', 'Крила', 7], ['jet', 'Реактивний ранець', 12]],
+};
+const AV_LABEL = { kind: 'Персонаж', color: 'Колір', head: 'Голова', face: 'Обличчя', back: 'Спина' };
+const AV_DEFAULT = { kind: 'blob', color: '#3D5AFE', head: 'none', face: 'none', back: 'none' };
+const meAv = () => ({ ...AV_DEFAULT, ...meAvatar });
+function avatarSvg(a = AV_DEFAULT, lvl = 1, px = 120) {
+  const c = /^#[0-9A-Fa-f]{6}$/.test(a.color) ? a.color : AV_DEFAULT.color, robot = a.kind === 'robot';
+  const back = { cape: '<path d="M34 62Q60 50 86 62L98 112Q60 100 22 112Z" fill="#E5364F"/>',
+    wings: '<path d="M30 66Q2 38 8 80Q18 72 30 86ZM90 66Q118 38 112 80Q102 72 90 86Z" fill="#fff" stroke="#BFD0FF" stroke-width="2"/>',
+    jet: '<rect x="18" y="56" width="14" height="36" rx="6" fill="#8A97AB"/><rect x="88" y="56" width="14" height="36" rx="6" fill="#8A97AB"/><path d="M20 92l5 16 5-16ZM90 92l5 16 5-16Z" fill="#FFB020"/>' }[a.back] || '';
+  const ears = a.kind === 'cat' ? `<path d="M30 52L33 16L56 38ZM90 52L87 16L64 38Z" fill="${c}"/><path d="M36 42L38 26L49 37ZM84 42L82 26L71 37Z" fill="#fff" opacity=".45"/>` : '';
+  const ant = robot ? '<path d="M60 32V18" stroke="#8A97AB" stroke-width="3"/><circle cx="60" cy="15" r="5" fill="#FFD23F"/>' : '';
+  const body = robot ? `<rect x="24" y="32" width="72" height="72" rx="18" fill="${c}"/>` : `<ellipse cx="60" cy="70" rx="38" ry="36" fill="${c}"/>`;
+  const mask = a.face === 'mask' ? '<rect x="32" y="54" width="56" height="18" rx="9" fill="#14213D"/>' : '';
+  const eyes = '<circle cx="47" cy="63" r="8" fill="#fff"/><circle cx="73" cy="63" r="8" fill="#fff"/><circle cx="48.5" cy="64" r="4" fill="#14213D"/><circle cx="74.5" cy="64" r="4" fill="#14213D"/>';
+  const mouth = '<path d="M52 80Q60 87 68 80" fill="none" stroke="#14213D" stroke-width="3" stroke-linecap="round"/><circle cx="38" cy="76" r="4" fill="#FF6FB0" opacity=".55"/><circle cx="82" cy="76" r="4" fill="#FF6FB0" opacity=".55"/>';
+  const face = { glasses: '<g fill="none" stroke="#14213D" stroke-width="2.5"><circle cx="47" cy="63" r="11"/><circle cx="73" cy="63" r="11"/><path d="M58 63h4"/></g>',
+    shades: '<rect x="34" y="56" width="24" height="14" rx="5" fill="#14213D"/><rect x="62" y="56" width="24" height="14" rx="5" fill="#14213D"/><path d="M58 61h4" stroke="#14213D" stroke-width="3"/>' }[a.face] || '';
+  const head = { cap: '<path d="M30 46Q60 12 90 46Z" fill="#E5364F"/><path d="M80 44Q100 44 104 50H82Z" fill="#B3243A"/>',
+    phones: '<path d="M22 64Q22 24 60 24Q98 24 98 64" fill="none" stroke="#14213D" stroke-width="5"/><rect x="14" y="56" width="14" height="22" rx="6" fill="#14213D"/><rect x="92" y="56" width="14" height="22" rx="6" fill="#14213D"/>',
+    wizard: '<path d="M34 42L60 0L86 42Z" fill="#7A4DFF"/><path d="M26 42Q60 52 94 42Q60 34 26 42Z" fill="#5B3DF0"/><path d="M60 14l2 5 5 1-4 3 1 5-4-3-4 3 1-5-4-3 5-1Z" fill="#FFD23F"/>',
+    crown: '<path d="M38 40L36 16L48 28L60 10L72 28L84 16L82 40Z" fill="#FFD23F" stroke="#C98B00" stroke-width="2"/><circle cx="60" cy="30" r="3" fill="#E5364F"/>' }[a.head] || '';
+  const aura = lvl >= 10 ? '<circle cx="60" cy="66" r="58" fill="#FFD23F" opacity=".22"/><circle cx="60" cy="66" r="50" fill="#FFD23F" opacity=".18"/>' : '';
+  return `<svg viewBox="0 0 120 120" width="${px}" height="${px}" aria-hidden="true">${aura}${back}${ears}${ant}${body}<ellipse cx="60" cy="88" rx="20" ry="13" fill="#fff" opacity=".25"/>${mask}${eyes}${mouth}${face}${head}</svg>`;
+}
+// У викладача: персонаж учня, якщо він його вже створив, інакше літера
+const faceOf = (n, lvl = 1) => { const a = avatars[students[n]?.token]; return a ? `<span class="av-face sm">${avatarSvg(a, lvl, 40)}</span>` : `<span class="avatar" style="--h:${hue(n)}">${esc(n[0])}</span>`; };
+
+function renderAvatarTab(g) {
+  const a = meAv();
+  $('#meAvatar').innerHTML = `<div class="av-stage"><div class="av-big">${avatarSvg(a, g.lvl, 170)}</div>
+      <div><h3>${esc(me.name)}</h3><p class="muted">Рівень ${g.lvl} · ${rank(g.lvl)}</p>
+      <p class="muted small">Нові речі відкриваються з рівнями. Ходи на уроки, здавай ДЗ і збирай медалі!</p></div></div>
+    ${Object.entries(AV).map(([k, opts]) => `<p class="label lbl-gap">${AV_LABEL[k]}</p><div class="av-opts">${opts.map(([v, name, need]) => {
+      const lock = g.lvl < need;
+      return `<button class="av-opt${a[k] === v ? ' on' : ''}" data-av="${k}" data-v="${v}"${lock ? ` disabled title="Відкриється на рівні ${need}"` : ''}>${k === 'color' ? `<i style="background:${v}"></i>` : esc(name)}${lock ? ` <small>🔒 ${need}</small>` : ''}</button>`;
+    }).join('')}</div>`).join('')}`;
+}
+$('#meAvatar').onclick = e => {
+  const b = e.target.closest('[data-av]');
+  if (!b || b.disabled || !token || !F) return;
+  meAvatar = { ...meAv(), [b.dataset.av]: b.dataset.v };
+  render();
+  run(F.setDoc(F.doc(db, 'public', token, 'avatar', 'me'), meAvatar));
+};
+
+// ---------- Нагороди учня: рівень, сертифікати, колесо, колекція медалей ----------
+function renderAwards(g) {
+  const certs = me.certs || [];
+  $('#meLevel').innerHTML = `<div class="lvl-card"><span class="av-face">${avatarSvg(meAv(), g.lvl, 72)}</span>${lvlHtml(g)}</div>
+    <p class="muted small">XP: урок +${XP.lesson} · зараховане ДЗ +${XP.hw} · медаль від викладача +${XP.medal} · бонуси колеса</p>
+    ${certs.length ? `<p class="label lbl-gap">🎓 Сертифікати</p><div class="certs">${certs.map((c, i) => `<button class="cert-card" data-showcert="${i}"><b>«${esc(c.course)}»</b><small>${longDate(c.date)} · відкрити</small></button>`).join('')}</div>` : ''}`;
+  const have = new Set(g.medals), cats = [...new Set(MEDALS.map(m => m[3]))];
+  $('#meMedals').innerHTML = `<p class="label lbl-gap">🏅 Колекція медалей · ${MEDALS.filter(m => have.has(`${m[0]} ${m[1]}`)).length} з ${MEDALS.length}</p>
+    ${cats.map(c => `<p class="muted small cat">${c}</p><div class="medals">${MEDALS.filter(m => m[3] === c).map(([n, e]) => medalHtml(`${n} ${e}`, have.has(`${n} ${e}`) ? '' : 'lock')).join('')}</div>`).join('')}`;
+  renderWheel();
+}
+$('#meLevel').onclick = e => { const b = e.target.closest('[data-showcert]'); if (b) openCert(me.name, me.certs[+b.dataset.showcert]); };
+
+let spinning = false;
+$('#wheelDisc').innerHTML = (() => {
+  const n = PRIZES.length, col = ['#3D5AFE', '#9B5CFF', '#0FB48F', '#E0408A', '#FFB020', '#2F6BFF', '#12C2A0', '#7A4DFF'];
+  const pt = (r, a) => `${(r * Math.cos(a)).toFixed(2)} ${(r * Math.sin(a)).toFixed(2)}`;
+  return `<svg viewBox="-100 -100 200 200">${PRIZES.map((p, i) => {
+    const a0 = i / n * 2 * Math.PI - Math.PI / 2, a1 = (i + 1) / n * 2 * Math.PI - Math.PI / 2, am = (a0 + a1) / 2, [x, y] = pt(64, am).split(' ');
+    return `<path d="M0 0L${pt(96, a0)}A96 96 0 0 1 ${pt(96, a1)}Z" fill="${col[i]}"/>
+      <text x="${x}" y="${y}" transform="rotate(${am * 180 / Math.PI + 90} ${x} ${y})" text-anchor="middle" dominant-baseline="central">${p.s}</text>`;
+  }).join('')}<circle r="96" fill="none" stroke="#fff" stroke-width="4"/><circle r="15" fill="#fff"/></svg>`;
+})();
+const wheelAngle = i => 360 - (i + .5) * 360 / PRIZES.length; // сектор i під стрілкою зверху
+function renderWheel() {
+  if (spinning) return;
+  const got = meSpins[weekKey()], today = tzParts(BASE_TZ, Date.now()).date;
+  const active = (me.history || []).some(x => x.status === 'present' && x.date >= addDays(today, -7));
+  if (got) $('#wheelDisc').style.transform = `rotate(${wheelAngle(got.prize)}deg)`;
+  $('#spinBtn').disabled = !!got || !active;
+  $('#wheelMsg').innerHTML = got ? `Приз цього тижня: <b>${esc(PRIZES[got.prize]?.t || '')}</b>. Наступна спроба — з понеділка 🙂`
+    : active ? 'Ти був(ла) на уроці цього тижня — крути колесо!' : 'Колесо відкривається, коли за останні 7 днів був хоча б один урок.';
+}
+$('#spinBtn').onclick = async () => {
+  if (spinning || !token || !F || meSpins[weekKey()]) return;
+  let r = Math.random() * PRIZES.reduce((a, p) => a + p.w, 0);
+  const i = PRIZES.findIndex(p => (r -= p.w) < 0);
+  spinning = true;
+  $('#spinBtn').disabled = true;
+  // shortcut: приз обирається в браузері учня (правила лише обмежують 1 спробу на тиждень); для грошових призів — перевіряти на сервері
+  try { await F.setDoc(F.doc(db, 'public', token, 'spins', weekKey()), { prize: i, created: F.serverTimestamp() }); }
+  catch (e) { spinning = false; $('#spinBtn').disabled = false; return toast('Не вдалося: ' + e.message); }
+  const d = $('#wheelDisc');
+  d.style.transition = 'transform 4.5s cubic-bezier(.15,.7,.1,1)';
+  d.style.transform = `rotate(${360 * 6 + wheelAngle(i)}deg)`;
+  setTimeout(() => { spinning = false; d.style.transition = 'none'; toast(`🎉 Твій приз: ${PRIZES[i].t}`); render(); }, 4700);
+};
+
+// ---------- ДЗ: учень здає (текст, посилання, файл), викладач перевіряє ----------
+const safeUrl = u => /^https?:\/\/\S+$/i.test(u || '') ? u : '';
+const ST_LABEL = { new: '⏳ На перевірці', ok: '✅ Зараховано', redo: '↩ Треба доопрацювати' };
+const subLine = x => `<div class="sub-line st-${x.status}"><b>${ST_LABEL[x.status] || ''}</b>
+  <small class="muted">${x.created ? new Date(ms(x.created)).toLocaleDateString('uk', { day: 'numeric', month: 'short' }) : ''}${x.file ? ' · 📎 ' + esc(x.file) : ''}${safeUrl(x.link) ? ' · 🔗 посилання' : ''}</small>
+  ${x.comment ? `<p>💬 ${esc(x.comment)}</p>` : ''}</div>`;
+const readData = file => new Promise((ok, bad) => {
+  if (file.size > 650000) return bad(new Error('файл завеликий (до 650 КБ). Завантаж його на Google Диск і додай посилання'));
+  const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => bad(r.error); r.readAsDataURL(file);
+});
+$('#meHw').onclick = e => {
+  const b = e.target.closest('[data-submit]');
+  if (!b) return;
+  const f = $('#subForm'), note = (me.notes || []).find(x => x.date === b.dataset.submit);
+  f.dataset.hw = b.dataset.submit;
+  $('#subTask').textContent = note?.homework || '';
+  $('#subDlg').showModal();
+};
+$('#subForm').onsubmit = async e => {
+  e.preventDefault();
+  const f = e.target, el = f.elements, text = el['text'].value.trim().slice(0, 2000), link = el['link'].value.trim().slice(0, 500), file = el['file'].files[0];
+  if (link && !safeUrl(link)) return toast('Посилання має починатися з https://');
+  if (!text && !link && !file) return toast('Додай відповідь, посилання або файл');
+  if (!token || !F) return;
+  const btn = f.querySelector('button.btn');
+  btn.disabled = true;
+  try {
+    const data = file ? (file.type.startsWith('image/') ? await compress(file) : await readData(file)) : '';
+    const id = F.doc(F.collection(db, 'public', token, 'subs')).id, bt = F.writeBatch(db);
+    if (data) bt.set(F.doc(db, 'public', token, 'subData', id), { data });
+    bt.set(F.doc(db, 'public', token, 'subs', id), { hw: f.dataset.hw, text, link, file: file ? file.name.slice(0, 200) : '', status: 'new', created: F.serverTimestamp() });
+    await bt.commit();
+    $('#subDlg').close(); f.reset();
+    toast('ДЗ надіслано на перевірку 📬');
+  } catch (err) { toast('Не вдалося надіслати: ' + err.message); }
+  btn.disabled = false;
+};
+
+const nameByToken = tok => Object.keys(students).find(n => students[n].token === tok) || 'Учень';
+function renderSubs() {
+  const list = Object.values(subs).sort((a, b) => (b.status === 'new') - (a.status === 'new') || ms(b.created) - ms(a.created));
+  const fresh = list.filter(x => x.status === 'new').length;
+  $('#hwCount').hidden = !fresh;
+  $('#hwCount').textContent = fresh;
+  $('#subsList').innerHTML = list.length ? list.slice(0, fresh + 30).map(x => {
+    const n = nameByToken(x.token), task = notes[`${x.hw}_${n}`]?.homework, url = safeUrl(x.link);
+    return `<div class="sub st-${x.status}">
+      ${faceOf(n)}
+      <div class="who"><b>${esc(n)}</b> <small>здано ${x.created ? new Date(ms(x.created)).toLocaleString('uk', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'щойно'} · ДЗ від ${longDate(x.hw)}</small>
+        ${task ? `<p class="nprev">Завдання: ${esc(task)}</p>` : ''}
+        ${x.text ? `<p class="sub-text">${esc(x.text)}</p>` : ''}
+        <div class="sub-att">${url ? `<a class="ghost link-btn" href="${esc(url)}" target="_blank" rel="noopener noreferrer">🔗 Відкрити посилання</a>` : ''}
+          ${x.file ? `<button class="ghost link-btn" data-file="${x.id}" data-tok="${esc(x.token)}" data-fname="${esc(x.file)}">📎 ${esc(x.file)}</button>` : ''}</div>
+        ${x.status !== 'new' ? `<p class="sub-res"><b>${ST_LABEL[x.status]}</b>${x.comment ? ' · ' + esc(x.comment) : ''}</p>` : ''}
+      </div>
+      ${x.status === 'new' ? `<form class="review" data-sub="${x.id}" data-tok="${esc(x.token)}">
+        <input name="comment" maxlength="500" placeholder="Коментар учню (необов'язково)" aria-label="Коментар">
+        <button class="ghost" data-st="redo">↩ Доопрацювати</button><button class="primary" data-st="ok">✅ Зарахувати</button></form>` : ''}
+    </div>`;
+  }).join('') : '<p class="empty">Поки ніхто не здав ДЗ. Учні надсилають його з кабінету: вкладка «Домашні».</p>';
+}
+$('#subsList').onsubmit = e => {
+  e.preventDefault();
+  const f = e.target, st = e.submitter?.dataset.st || 'ok', comment = f.elements['comment'].value.trim().slice(0, 500), n = nameByToken(f.dataset.tok);
+  run(F.updateDoc(F.doc(db, 'public', f.dataset.tok, 'subs', f.dataset.sub), { status: st, comment, reviewed: F.serverTimestamp() }).then(() => {
+    notifyStudent(n, 'review', st === 'ok' ? `ДЗ зараховано ✅ +${XP.hw} XP${comment ? ` · ${comment}` : ''}` : `ДЗ треба доопрацювати ↩${comment ? `: ${comment}` : ''}`);
+    toast(`${n}: ${ST_LABEL[st].toLowerCase()}`);
+  }));
+};
+$('#subsList').onclick = e => {
+  const b = e.target.closest('[data-file]');
+  if (!b) return;
+  run(F.getDoc(F.doc(db, 'public', b.dataset.tok, 'subData', b.dataset.file)).then(d => {
+    const data = d.data()?.data;
+    if (typeof data !== 'string' || !data.startsWith('data:')) return toast('Файл не знайдено');
+    const a = document.createElement('a'); a.href = data; a.download = b.dataset.fname || 'dz'; a.click();
+  }));
+};
+
+// ---------- Медалі: видача викладачем ----------
+function openAwards(n) {
+  const dlg = $('#awardDlg'), own = new Set(students[n]?.badges || []);
+  dlg.dataset.name = n;
+  $('#awardTitle').textContent = `Медалі: ${n}`;
+  $('#awardGrid').innerHTML = [...new Set(MEDALS.filter(m => m[3] !== 'Автоматичні').map(m => m[3]))].map(c => `<p class="muted small cat">${c}</p>
+    <div class="medals">${BADGES.filter(b => MEDAL[b].c === c).map(b => medalHtml(b, own.has(b) ? 'on' : 'lock', 'button', ` data-medal="${esc(b)}"`)).join('')}</div>`).join('');
+  if (!dlg.open) dlg.showModal();
+}
+$('#awardGrid').onclick = e => {
+  const b = e.target.closest('[data-medal]');
+  if (!b) return;
+  const n = $('#awardDlg').dataset.name, m = b.dataset.medal, has = (students[n]?.badges || []).includes(m);
+  run(F.setDoc(F.doc(db, 'students', n), { badges: has ? F.arrayRemove(m) : F.arrayUnion(m) }, { merge: true }).then(() => {
+    if (!has) { notifyStudent(n, 'badge', `Нова медаль: ${m} (+${XP.medal} XP)`); toast(`${n} отримує медаль ${m}`); }
+  }));
+};
+
+// ---------- Сертифікати: викладач позначає завершений курс → сертифікат створюється сам ----------
+const COURSES = ['Scratch', 'Python', 'Веб-розробка: HTML і CSS', 'JavaScript', 'Roblox Studio', 'Minecraft Education', 'Монтаж відео в CapCut', 'Сайти на Wix', 'Дизайн у Figma', 'Canva', "Комп'ютерна грамотність", 'Штучний інтелект'];
+$('#courses').innerHTML = COURSES.map(c => `<option value="${esc(c)}">`).join('');
+function openCertIssue(n) {
+  const f = $('#certForm'), certs = students[n]?.certs || [];
+  f.dataset.name = n;
+  $('#certWho').textContent = n;
+  $('#certList').innerHTML = certs.map((c, i) => `<button type="button" class="cert-card" data-showcert="${i}"><b>«${esc(c.course)}»</b><small>${longDate(c.date)} · відкрити</small></button>`).join('');
+  $('#certIssue').showModal();
+}
+$('#certList').onclick = e => { const b = e.target.closest('[data-showcert]'), n = $('#certForm').dataset.name; if (b) openCert(n, students[n].certs[+b.dataset.showcert]); };
+$('#certForm').onsubmit = e => {
+  e.preventDefault();
+  const n = e.target.dataset.name, course = e.target.elements['course'].value.trim().slice(0, 80);
+  if (!course) return;
+  const cert = { course, date: iso(new Date()), lessons: progress(recordsBy()[n] || []).present };
+  run(F.setDoc(F.doc(db, 'students', n), { certs: F.arrayUnion(cert) }, { merge: true }).then(() => {
+    notifyStudent(n, 'cert', `Вітаю! Ти завершив(ла) курс «${course}» — сертифікат уже в кабінеті 🎓`);
+    $('#certIssue').close(); e.target.reset();
+    openCert(n, cert);
+  }));
+};
+const certNo = (n, c) => 'BS-' + [...`${n}|${c.course}|${c.date}`].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7).toString(36).toUpperCase().padStart(7, '0');
+function certSvg(n, c) {
+  const F1 = "font-family=\"Unbounded, 'Segoe UI', Arial, sans-serif\"", F2 = "font-family=\"Onest, 'Segoe UI', Arial, sans-serif\"";
+  const nameSize = n.length > 22 ? 44 : 60;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1123 794" width="1123" height="794">
+  <defs><linearGradient id="cg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2F6BFF"/><stop offset=".5" stop-color="#7A4DFF"/><stop offset="1" stop-color="#12C2A0"/></linearGradient>
+  <radialGradient id="cm" cx=".35" cy=".3"><stop offset="0" stop-color="#FFF3B0"/><stop offset=".6" stop-color="#FFD23F"/><stop offset="1" stop-color="#C98B00"/></radialGradient></defs>
+  <rect width="1123" height="794" fill="#fff"/>
+  <path d="M0 0H1123V150Q560 230 0 120Z" fill="url(#cg)" opacity=".08"/>
+  <rect x="26" y="26" width="1071" height="742" rx="30" fill="none" stroke="url(#cg)" stroke-width="10"/>
+  <rect x="50" y="50" width="1023" height="694" rx="20" fill="none" stroke="#D9DFF5" stroke-width="2"/>
+  <rect x="526" y="76" width="70" height="70" rx="22" fill="url(#cg)"/>
+  <text x="561" y="124" text-anchor="middle" ${F1} font-size="38" font-weight="700" fill="#fff">B</text>
+  <text x="561" y="182" text-anchor="middle" ${F2} font-size="20" font-weight="700" letter-spacing="8" fill="#4A5578">BALAN STUDY</text>
+  <text x="561" y="270" text-anchor="middle" ${F1} font-size="66" font-weight="700" fill="url(#cg)">СЕРТИФІКАТ</text>
+  <text x="561" y="322" text-anchor="middle" ${F2} font-size="24" fill="#4A5578">цим підтверджується, що</text>
+  <text x="561" y="${400 + (60 - nameSize) / 3}" text-anchor="middle" ${F1} font-size="${nameSize}" font-weight="700" fill="#0F1733">${esc(n)}</text>
+  <path d="M311 428H811" stroke="#D9DFF5" stroke-width="2"/>
+  <text x="561" y="476" text-anchor="middle" ${F2} font-size="24" fill="#4A5578">успішно завершив(ла) курс</text>
+  <text x="561" y="534" text-anchor="middle" ${F1} font-size="36" font-weight="700" fill="#3D5AFE">«${esc(c.course)}»</text>
+  ${c.lessons ? `<text x="561" y="578" text-anchor="middle" ${F2} font-size="20" fill="#4A5578">${c.lessons} ${plural(c.lessons, 'заняття', 'заняття', 'занять')} індивідуально 1:1</text>` : ''}
+  <circle cx="561" cy="660" r="48" fill="url(#cm)" stroke="#C98B00" stroke-width="4"/><text x="561" y="676" text-anchor="middle" font-size="44">🎓</text>
+  <text x="150" y="650" ${F2} font-size="18" fill="#4A5578">Дата видачі</text>
+  <text x="150" y="680" ${F2} font-size="22" font-weight="700" fill="#0F1733">${longDate(c.date)} ${c.date.slice(0, 4)}</text>
+  <text x="973" y="650" text-anchor="end" ${F2} font-size="18" fill="#4A5578">Номер</text>
+  <text x="973" y="680" text-anchor="end" ${F2} font-size="22" font-weight="700" fill="#0F1733">${certNo(n, c)}</text>
+</svg>`;
+}
+function openCert(n, c) {
+  if (!c) return;
+  $('#certBox').innerHTML = certSvg(n, c);
+  $('#certDl').onclick = () => downloadPng(certSvg(n, c), `Сертифікат ${n} — ${c.course}.png`);
+  $('#certDlg').showModal();
+}
+async function downloadPng(svg, file) {
+  try {
+    const img = new Image();
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    await img.decode();
+    const cv = document.createElement('canvas');
+    cv.width = 2246; cv.height = 1588;
+    cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+    const a = document.createElement('a'); a.href = cv.toDataURL('image/png'); a.download = file; a.click();
+  } catch (e) { toast('Не вдалося зберегти: ' + e.message); }
+}
+
+// ---------- Сповіщення ----------
+// Викладач пише в public/{код}/notifs: ДЗ, медаль, перевірка ДЗ, сертифікат. Чат і рівень беруться з наявних даних.
+function notifyStudent(n, type, text) {
+  const tok = students[n]?.token;
+  if (tok) run(F.addDoc(F.collection(db, 'public', tok, 'notifs'), { type, text: text.slice(0, 300), created: F.serverTimestamp() }));
+}
+const N_ICON = { hw: '📚', badge: '🏅', review: '📝', cert: '🎓' }, N_GO = { hw: 'me-hw', badge: 'me-awards', review: 'me-hw', cert: 'me-awards' };
+function feed() {
+  const out = [];
+  if (me) {
+    for (const [id, x] of Object.entries(meNotifs)) out.push({ id, t: ms(x.created), icon: N_ICON[x.type] || '🔔', text: x.text, go: N_GO[x.type] || 'me-home' });
+    for (const [id, m] of Object.entries(meMsgs)) if (m.by === 'teacher') out.push({ id, t: ms(m.created), icon: '💬', text: `Викладач: ${m.text}`, go: 'me-chat' });
+  } else if (isTeacher) {
+    for (const [id, m] of Object.entries(msgs)) if (m.by === 'student') out.push({ id, t: ms(m.created), icon: '💬', text: `${nameByToken(m.token)}: ${m.text}`, go: 'tab:chats', chat: nameByToken(m.token) });
+    for (const x of Object.values(subs)) out.push({ id: x.id, t: ms(x.created), icon: '📬', text: `${nameByToken(x.token)} здав(ла) ДЗ`, go: 'tab:hw' });
+    for (const [id, r] of Object.entries(requests)) out.push({ id, t: ms(r.created), icon: '📝', text: `Заявка: ${r.name}, ${shortSlot(`${r.date} ${r.hour}`)}`, go: 'tab:requests' });
+    for (const x of Object.values(spins)) out.push({ id: x.id + x.token, t: ms(x.created), icon: '🎡', text: `${nameByToken(x.token)} виграв(ла): ${PRIZES[x.prize]?.t || ''}`, go: 'tab:students' });
+  }
+  return out.sort((a, b) => b.t - a.t).slice(0, 60);
+}
+const seenKey = () => 'rozklad-seen-' + (me ? token : 'teacher');
+const getSeen = () => { try { return +localStorage.getItem(seenKey()) || 0; } catch { return 0; } };
+const loadedAt = Date.now(), pushed = new Set();
+function renderBell() {
+  const items = feed(), seen = getSeen(), unread = items.filter(x => x.t > seen).length;
+  $('#bell').hidden = !me && !isTeacher;
+  $('#bellCount').hidden = !unread;
+  $('#bellCount').textContent = unread > 9 ? '9+' : unread;
+  if ($('#notifDlg').open) {
+    $('#notifList').innerHTML = items.length ? items.map((x, i) => `<button class="nitem${x.t > (+$('#notifDlg').dataset.seen || 0) ? ' new' : ''}" data-i="${i}">
+      <span>${x.icon}</span><span><b>${esc(x.text)}</b><small>${x.t ? new Date(x.t).toLocaleString('uk', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</small></span></button>`).join('')
+      : '<p class="empty">Поки сповіщень немає</p>';
+    $('#notifOn').hidden = !('Notification' in window) || Notification.permission !== 'default';
+  }
+  // нове після відкриття сторінки → спливашка, а якщо вкладка у фоні — системне сповіщення
+  for (const x of items) {
+    if (x.t <= loadedAt || pushed.has(x.id)) continue;
+    pushed.add(x.id);
+    if (document.visibilityState === 'visible') toast(`${x.icon} ${x.text}`);
+    else systemNotify(`${x.icon} ${x.text}`, x.id);
+  }
+  // новий рівень учня
+  if (me && token) {
+    const lvl = myGrowth().lvl, k = 'rozklad-lvl-' + token;
+    let was = 0; try { was = +localStorage.getItem(k) || 0; } catch {}
+    if (lvl > was) {
+      // перші секунди дані ще догружаються — рівень лише запам'ятовуємо, без вітання
+      if (was && Date.now() - loadedAt > 6000) { toast(`🎉 Новий рівень ${lvl}! Ти тепер ${rank(lvl)}`); systemNotify(`🎉 Новий рівень ${lvl}!`, 'lvl' + lvl); }
+      try { localStorage.setItem(k, lvl); } catch {}
+    }
+  }
+}
+function systemNotify(body, tag) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const opt = { body, tag, icon: 'icon-192.png', badge: 'icon-192.png' };
+  navigator.serviceWorker?.getRegistration().then(r => r ? r.showNotification('Balan Study', opt) : new Notification('Balan Study', opt)).catch(() => {});
+}
+function askNotif() {
+  if (!('Notification' in window)) return toast('Цей браузер не підтримує сповіщення. На iPhone спершу додай сайт на головний екран');
+  if (Notification.permission === 'denied') return toast('Сповіщення заблоковані — дозволь їх у налаштуваннях браузера для цього сайту');
+  Notification.requestPermission().then(p => { if (p === 'granted') systemNotify('Сповіщення увімкнено 👌', 'hello'); render(); });
+}
+$('#bell').onclick = () => {
+  const dlg = $('#notifDlg'), items = feed();
+  dlg.dataset.seen = getSeen();
+  try { localStorage.setItem(seenKey(), Math.max(getSeen(), ...items.map(x => x.t), 0)); } catch {}
+  dlg.showModal();
+  render();
+};
+$('#notifOn').onclick = askNotif;
+$('#notifList').onclick = e => {
+  const b = e.target.closest('[data-i]');
+  if (!b) return;
+  const x = feed()[+b.dataset.i];
+  $('#notifDlg').close();
+  if (!x) return;
+  if (x.chat) chatName = x.chat;
+  if (x.go.startsWith('tab:')) { setView(x.go); if (matchMedia('(min-width: 761px)').matches) $('#panel').scrollIntoView(); return; }
+  setView(x.go === 'me-chat' ? 'chat' : 'profile');
+  if (x.go !== 'me-chat') showTab($('#me .tabs'), x.go);
+  if (matchMedia('(min-width: 761px)').matches) $('#me').scrollIntoView();
+};
+
 // ---------- PWA ----------
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js');
 let installEvt;
@@ -1044,11 +1485,12 @@ $('.bnav').onclick = e => {
   const b = e.target.closest('[data-view]');
   if (!b) return;
   // у викладача чати живуть у його кабінеті
-  if (b.dataset.view === 'chat' && !me && isTeacher) { setView('schedule'); showTab($('#panel .tabs'), 'chats'); return $('#panel').scrollIntoView(); }
   setView(b.dataset.view);
 };
 $('#setList').onclick = e => {
   const a = e.target.closest('[data-set]')?.dataset.set;
+  if (a?.startsWith('go:')) return setView(a.slice(3));
+  if (a === 'notif') askNotif();
   if (a === 'theme') { $('#theme').click(); render(); }
   if (a === 'tz') $('#tzBtn').click();
   if (a === 'install') $('#install').click();
@@ -1075,8 +1517,7 @@ const standalone = matchMedia('(display-mode: standalone)').matches || navigator
 try { token ? localStorage.setItem('rozklad-token', token) : token = (standalone && localStorage.getItem('rozklad-token')) || localStorage.getItem('rozklad-login'); } catch {}
 try { meSeen = +localStorage.getItem('rozklad-chat-' + token) || 0; } catch {}
 
-document.body.dataset.view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'schedule';
-if (document.body.dataset.view === 'chat') $('#me .tabs [data-tab="me-chat"]').click();
+{ const h = decodeURIComponent(location.hash.slice(1)); setView(VIEWS.includes(h) ? h : 'schedule'); }
 
 if (!configured) {
   lessons = { ...SEED };
@@ -1116,6 +1557,13 @@ if (!configured) {
       if (token) F.onSnapshot(F.collection(db, 'public', token, 'messages'), s => {
         meMsgs = {}; s.forEach(d => meMsgs[d.id] = d.data({ serverTimestamps: 'estimate' })); render();
       }, () => {});
+      const mine = (name, set) => token && F.onSnapshot(F.collection(db, 'public', token, name), s => {
+        const m = {}; s.forEach(d => m[d.id] = d.data({ serverTimestamps: 'estimate' })); set(m); render();
+      }, () => {});
+      mine('subs', m => meSubs = m);
+      mine('spins', m => meSpins = m);
+      mine('notifs', m => meNotifs = m);
+      mine('avatar', m => meAvatar = m.me || {});
 
       let unsub = [];
       A.onAuthStateChanged(auth, user => {
@@ -1125,6 +1573,7 @@ if (!configured) {
         document.body.classList.toggle('teacher', isTeacher);
         $('#login').textContent = user ? 'Вийти' : 'Вхід для викладача';
         if (user && !isTeacher) toast('Цей акаунт не має доступу до редагування');
+        if (!isTeacher && curView.startsWith('tab:')) setView('schedule');
         if (isTeacher) {
           // public/ оновлюємо лише після того, як завантажились і учні, і відмітки
           const loaded = new Set();
@@ -1139,6 +1588,14 @@ if (!configured) {
             F.onSnapshot(F.collectionGroup(db, 'photos'), s => {
               photos = {}; s.forEach(d => photos[d.id] = { ...d.data(), token: d.ref.parent.parent.id }); render();
             }, e => toast(e.message)),
+            ...['subs', 'spins', 'avatar'].map(name => F.onSnapshot(F.collectionGroup(db, name), s => {
+              const m = {};
+              s.forEach(d => m[d.id + '@' + d.ref.parent.parent.id] = { ...d.data({ serverTimestamps: 'estimate' }), id: d.id, token: d.ref.parent.parent.id });
+              if (name === 'subs') subs = m;
+              if (name === 'spins') spins = Object.fromEntries(Object.entries(m).map(([k, x]) => [k, { ...x, week: x.id }]));
+              if (name === 'avatar') avatars = Object.fromEntries(Object.values(m).map(x => [x.token, x]));
+              render();
+            }, e => toast(e.message))),
             F.onSnapshot(F.collectionGroup(db, 'messages'), s => {
               msgs = {}; s.forEach(d => msgs[d.id] = { ...d.data({ serverTimestamps: 'estimate' }), token: d.ref.parent.parent.id }); render();
             }, e => toast(e.message)),

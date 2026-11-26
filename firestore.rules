@@ -43,7 +43,58 @@ service cloud.firestore {
           && (request.resource.data.by == 'student' || (request.resource.data.by == 'teacher' && isTeacher()));
         allow delete: if isTeacher();
       }
+      // Сповіщення учню пише лише викладач
+      match /notifs/{id} {
+        allow read: if true;
+        allow create, delete: if isTeacher();
+      }
+      // Здане ДЗ: учень створює зі статусом 'new', перевіряє (змінює статус) лише викладач
+      match /subs/{id} {
+        allow read: if true;
+        allow create: if exists(/databases/$(db)/documents/public/$(token))
+          && request.resource.data.keys().hasOnly(['hw', 'text', 'link', 'file', 'status', 'created'])
+          && request.resource.data.hw is string && request.resource.data.hw.size() == 10
+          && request.resource.data.text is string && request.resource.data.text.size() <= 2000
+          && request.resource.data.link is string && request.resource.data.link.size() <= 500
+          && (request.resource.data.link == '' || request.resource.data.link.matches('https?://.+'))
+          && request.resource.data.file is string && request.resource.data.file.size() <= 200
+          && request.resource.data.status == 'new'
+          && request.resource.data.created == request.time;
+        allow update, delete: if isTeacher();
+      }
+      match /subData/{id} {
+        allow read: if true;
+        allow create: if exists(/databases/$(db)/documents/public/$(token))
+          && request.resource.data.keys().hasOnly(['data'])
+          && request.resource.data.data is string && request.resource.data.data.size() < 900000;
+        allow delete: if isTeacher();
+      }
+      // Колесо фортуни: документ = понеділок тижня, лише створення → одна спроба на тиждень
+      match /spins/{week} {
+        allow read: if true;
+        allow create: if exists(/databases/$(db)/documents/public/$(token))
+          && week.size() == 10
+          && request.resource.data.keys().hasOnly(['prize', 'created'])
+          && request.resource.data.prize is int && request.resource.data.prize >= 0 && request.resource.data.prize < 8
+          && request.resource.data.created == request.time;
+        allow delete: if isTeacher();
+      }
+      // Персонаж учня
+      match /avatar/{id} {
+        allow read: if true;
+        allow write: if id == 'me' && exists(/databases/$(db)/documents/public/$(token))
+          && request.resource.data.keys().hasOnly(['kind', 'color', 'head', 'face', 'back'])
+          && request.resource.data.kind is string && request.resource.data.kind.size() <= 20
+          && request.resource.data.color is string && request.resource.data.color.size() <= 20
+          && request.resource.data.head is string && request.resource.data.head.size() <= 20
+          && request.resource.data.face is string && request.resource.data.face.size() <= 20
+          && request.resource.data.back is string && request.resource.data.back.size() <= 20;
+      }
     }
+    // Викладач бачить усі фото, чати, ДЗ, колесо й персонажі одним списком
+    match /{path=**}/subs/{id} { allow read: if isTeacher(); }
+    match /{path=**}/spins/{id} { allow read: if isTeacher(); }
+    match /{path=**}/avatar/{id} { allow read: if isTeacher(); }
     // Викладач бачить усі фото й чати одним списком
     match /{path=**}/photos/{id} {
       allow read: if isTeacher();
