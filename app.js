@@ -55,8 +55,42 @@ const cleanName = s => s.trim().replace(/\//g, '-'); // "/" ламає id док
 const shortSlot = s => { const [d, h] = s.split(' '); return `${SHORT[dayIdx(parseIso(d))]} ${parseIso(d).getDate()}.${pad(parseIso(d).getMonth() + 1)} ${pad(h)}:00`; };
 console.assert(progress([{ date: '2026-01-01', status: 'present' }, { date: '2026-01-02', status: 'absent' }, { date: '2026-01-03', status: 'present' }, { date: '2026-01-04', status: 'excused' }, { date: '2026-01-05', status: 'present' }]).streak === 2, 'progress()');
 
+// ---------- Часові пояси: розклад ведеться за Києвом, показати можна в будь-якому поясі ----------
+const HOUR = 3600000;
+const validTz = z => { try { new Intl.DateTimeFormat('en', { timeZone: z }); return true; } catch { return false; } };
+const BASE_TZ = validTz('Europe/Kyiv') ? 'Europe/Kyiv' : 'Europe/Kiev'; // старі браузери знають лише Kiev
+const norm = z => z === 'Europe/Kiev' || z === 'Europe/Kyiv' ? BASE_TZ : z;
+const tzFmt = {};
+function tzParts(z, t) {
+  const f = tzFmt[z] ||= new Intl.DateTimeFormat('en-CA', { timeZone: z, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+  const p = Object.fromEntries(f.formatToParts(t).map(x => [x.type, x.value]));
+  return { date: `${p.year}-${p.month}-${p.day}`, min: +p.hour * 60 + +p.minute };
+}
+const offMin = (z, t) => { const p = tzParts(z, t); return Math.round((Date.parse(p.date + 'T00:00Z') + p.min * 60000 - t) / 60000); };
+// момент часу для «дата + хвилина доби» в поясі z (друга ітерація — на випадок переходу на літній час)
+const instant = (date, min, z) => { const g = Date.parse(date + 'T00:00Z') + min * 60000; return g - offMin(z, g - offMin(z, g) * 60000) * 60000; };
+const hm = m => `${pad(Math.floor(m / 60) % 24)}:${pad(m % 60)}`;
+const gmt = z => { const o = offMin(z, Date.now()), a = Math.abs(o); return 'GMT' + (o ? (o < 0 ? '-' : '+') + Math.floor(a / 60) + (a % 60 ? ':' + pad(a % 60) : '') : ''); };
+console.assert(instant('2026-01-05', 18 * 60, BASE_TZ) === Date.parse('2026-01-05T16:00Z') && instant('2026-07-06', 18 * 60, BASE_TZ) === Date.parse('2026-07-06T15:00Z')
+  && tzParts('Asia/Kolkata', Date.parse('2026-01-05T16:00Z')).min === 21 * 60 + 30 && tzParts('America/New_York', Date.parse('2026-01-05T03:00Z')).date === '2026-01-04', 'tz');
+// Українські назви, щоб знаходилось і «Варшава», і «Warsaw»
+const TZ_UK = { 'Europe/Warsaw': 'Варшава Польща', 'Europe/Berlin': 'Берлін Німеччина', 'Europe/Prague': 'Прага Чехія', 'Europe/London': 'Лондон Велика Британія Англія',
+  'Europe/Dublin': 'Дублін Ірландія', 'Europe/Paris': 'Париж Франція', 'Europe/Madrid': 'Мадрид Іспанія', 'Europe/Rome': 'Рим Італія', 'Europe/Lisbon': 'Лісабон Португалія',
+  'Europe/Vienna': 'Відень Австрія', 'Europe/Amsterdam': 'Амстердам Нідерланди', 'Europe/Brussels': 'Брюссель Бельгія', 'Europe/Zurich': 'Цюрих Швейцарія',
+  'Europe/Stockholm': 'Стокгольм Швеція', 'Europe/Oslo': 'Осло Норвегія', 'Europe/Copenhagen': 'Копенгаген Данія', 'Europe/Helsinki': 'Гельсінкі Фінляндія',
+  'Europe/Tallinn': 'Таллінн Естонія', 'Europe/Riga': 'Рига Латвія', 'Europe/Vilnius': 'Вільнюс Литва', 'Europe/Bucharest': 'Бухарест Румунія', 'Europe/Chisinau': 'Кишинів Молдова',
+  'Europe/Budapest': 'Будапешт Угорщина', 'Europe/Bratislava': 'Братислава Словаччина', 'Europe/Sofia': 'Софія Болгарія', 'Europe/Athens': 'Афіни Греція',
+  'Europe/Istanbul': 'Стамбул Туреччина', 'Asia/Tbilisi': 'Тбілісі Грузія', 'Asia/Dubai': 'Дубай ОАЕ Емірати', 'Asia/Jerusalem': 'Єрусалим Ізраїль',
+  'America/New_York': 'Нью-Йорк США', 'America/Chicago': 'Чикаго США', 'America/Denver': 'Денвер США', 'America/Los_Angeles': 'Лос-Анджелес США',
+  'America/Toronto': 'Торонто Канада', 'America/Vancouver': 'Ванкувер Канада', 'America/Edmonton': 'Едмонтон Канада', 'Australia/Sydney': 'Сідней Австралія',
+  'Asia/Tokyo': 'Токіо Японія', 'Asia/Shanghai': 'Шанхай Пекін Китай', 'Asia/Kolkata': 'Колката Індія', 'Asia/Almaty': 'Алмати Казахстан', 'Asia/Bangkok': 'Бангкок Таїланд' };
+const LOCAL_TZ = norm(Intl.DateTimeFormat().resolvedOptions().timeZone);
+const tzName = z => z === BASE_TZ ? 'Київ' : (TZ_UK[z] || '').split(' ')[0] || z.split('/').pop().replace(/_/g, ' ');
+let tz = BASE_TZ;
+try { const t = localStorage.getItem('rozklad-tz'); if (t && validTz(t)) tz = norm(t); } catch {}
+
 const configured = !!(window.FIREBASE_CONFIG && FIREBASE_CONFIG.projectId);
-let lessons = {}, changes = {}, students = {}, attendance = {}, payments = {}, requests = {}, notes = {}, photos = {}, mePhotos = {};
+let lessons = {}, changes = {}, students = {}, attendance = {}, payments = {}, requests = {}, notes = {}, photos = {}, mePhotos = {}, msgs = {}, meMsgs = {};
 const imgCache = {}; // id фото → data URL
 let isTeacher = false, db, F, me = null;
 let week = addDays(iso(new Date()), -dayIdx(new Date())); // понеділок поточного тижня
@@ -91,48 +125,63 @@ function chip(s, q) {
 }
 
 // ---------- Публічна частина ----------
-function renderGrid(q) {
-  const now = new Date(), today = iso(now), nowH = now.getHours();
+// Тиждень в обраному поясі: клітинка (дата, хвилина доби) → київський слот (date, h).
+// data-date/data-hour у клітинках лишаються київськими, тому редагування й заявки працюють як раніше.
+function viewWeek() {
+  const dates = DAYS.map((_, i) => addDays(week, i)), cells = {}, rows = new Set();
+  for (let i = -1; i < 8; i++) {
+    const d = addDays(week, i);
+    for (const h of HOURS) {
+      const t = instant(d, h * 60, BASE_TZ), v = tzParts(tz, t);
+      if (!dates.includes(v.date)) continue;
+      cells[`${v.date} ${v.min}`] = { date: d, h, t };
+      rows.add(v.min);
+    }
+  }
+  return { dates, cells, rows: [...rows].sort((a, b) => a - b) };
+}
+
+function renderGrid(q, v, on) {
+  const now = Date.now(), cur = tzParts(tz, now);
   const free = document.body.classList.contains('free');
   const tag = isTeacher || free ? 'button' : 'div';
-  const dates = DAYS.map((_, i) => addDays(week, i));
-  let html = '<div class="cell corner">Час</div>' + dates.map((dt, i) =>
-    `<div class="cell head${dt === today ? ' today' : ''}">${DAYS[i]}<small>${longDate(dt)}</small></div>`).join('');
-  const day = dates.map(slotsOn);
-  for (const h of HOURS) {
-    html += `<div class="cell time${h === nowH ? ' now' : ''}">${pad(h)}:00 – ${pad((h + 1) % 24)}:00</div>`;
-    dates.forEach((dt, i) => {
-      const s = day[i][h];
-      const past = dt < today || (dt === today && h <= nowH);
+  let html = '<div class="cell corner">Час</div>' + v.dates.map((dt, i) =>
+    `<div class="cell head${dt === cur.date ? ' today' : ''}">${DAYS[i]}<small>${longDate(dt)}</small></div>`).join('');
+  for (const m of v.rows) {
+    html += `<div class="cell time${cur.min >= m && cur.min < m + 60 ? ' now' : ''}">${hm(m)} – ${hm(m + 60)}</div>`;
+    for (const dt of v.dates) {
+      const c = v.cells[`${dt} ${m}`];
+      if (!c) { html += '<div class="cell slot none"></div>'; continue; }
+      const s = on(c.date)[c.h], past = now >= c.t;
       const isFree = free && !past && (!s || s.cancelled);
-      const cls = `cell slot${dt === today ? ' today' : ''}${dt === today && h === nowH ? ' live' : ''}${isFree ? ' open' : ''}`;
-      html += `<${tag} class="${cls}" data-date="${dt}" data-hour="${h}"${tag === 'button' && free && !isFree && !isTeacher ? ' disabled' : ''}>${s ? chip(s, q) : ''}</${tag}>`;
-    });
+      const cls = `cell slot${dt === cur.date ? ' today' : ''}${past && now < c.t + HOUR ? ' live' : ''}${isFree ? ' open' : ''}`;
+      html += `<${tag} class="${cls}" data-date="${c.date}" data-hour="${c.h}"${tag === 'button' && free && !isFree && !isTeacher ? ' disabled' : ''}>${s ? chip(s, q) : ''}</${tag}>`;
+    }
   }
   $('#grid').innerHTML = html;
 }
 
 // Телефон: стрічка днів + список обраного дня (замість широкої таблиці)
-let mDay = dayIdx(new Date());
-const resetDay = () => { const t = iso(new Date()); mDay = week <= t && t < addDays(week, 7) ? dayIdx(new Date()) : 0; };
-function renderAgenda(q) {
-  const today = iso(new Date()), nowH = new Date().getHours();
+let mDay = 0;
+const resetDay = () => { const t = tzParts(tz, Date.now()).date; mDay = week <= t && t < addDays(week, 7) ? dayIdx(parseIso(t)) : 0; };
+resetDay();
+function renderAgenda(q, v, on) {
+  const now = Date.now(), today = tzParts(tz, now).date;
   const free = document.body.classList.contains('free');
-  const dates = DAYS.map((_, i) => addDays(week, i));
-  const strip = dates.map((dt, i) => {
-    const n = Object.values(slotsOn(dt)).filter(s => !s.cancelled).length;
+  const day = dt => v.rows.map(m => ({ m, c: v.cells[`${dt} ${m}`] })).filter(r => r.c).map(r => ({ ...r, s: on(r.c.date)[r.c.h] }));
+  const strip = v.dates.map((dt, i) => {
+    const n = day(dt).filter(r => r.s && !r.s.cancelled).length;
     return `<button class="dchip${i === mDay ? ' on' : ''}${dt === today ? ' today' : ''}" data-i="${i}" aria-label="${DAYS[i]}">
       <small>${SHORT[i]}</small><b>${parseIso(dt).getDate()}</b><i>${n ? n + ' зан.' : '—'}</i></button>`;
   }).join('');
-  const dt = dates[mDay], s = slotsOn(dt);
-  const hours = isTeacher || free ? HOURS : Object.keys(s).map(Number).sort((a, b) => a - b);
-  const rows = hours.map(h => {
-    const x = s[h], past = dt < today || (dt === today && h <= nowH);
+  const dt = v.dates[mDay];
+  const rows = day(dt).filter(r => isTeacher || free || r.s).map(({ m, c, s: x }) => {
+    const past = now >= c.t, live = past && now < c.t + HOUR;
     const open = free && !past && (!x || x.cancelled);
     const tag = isTeacher || open ? 'button' : 'div';
     const hint = open ? 'вільно · записатися' : isTeacher && !x ? '+ додати' : '';
-    return `<${tag} class="drow${dt === today && h === nowH ? ' live' : ''}${open ? ' open' : ''}${past ? ' past' : ''}" data-date="${dt}" data-hour="${h}">
-      <time>${pad(h)}:00</time>${x ? chip(x, q) : `<span class="hint">${hint}</span>`}</${tag}>`;
+    return `<${tag} class="drow${live ? ' live' : ''}${open ? ' open' : ''}${past ? ' past' : ''}" data-date="${c.date}" data-hour="${c.h}">
+      <time>${hm(m)}</time>${x ? chip(x, q) : `<span class="hint">${hint}</span>`}</${tag}>`;
   }).join('');
   $('#agenda').innerHTML = `<div class="dstrip">${strip}</div>
     <h3 class="dtitle">${DAYS[mDay]}, ${longDate(dt)}${dt === today ? ' <em>сьогодні</em>' : ''}</h3>
@@ -151,41 +200,52 @@ function renderWeek() {
     <div><b>1:1</b><small>індивідуально</small></div>`;
 }
 
+// Мої заняття на найближчі дні (з урахуванням переносів), t — момент початку
+function myLessons(days) {
+  const out = [], now = Date.now(), start = tzParts(BASE_TZ, now).date;
+  for (let i = 0; i < days; i++) {
+    const dt = addDays(start, i), s = slotsOn(dt);
+    for (const h of Object.keys(s).map(Number).sort((a, b) => a - b)) {
+      const t = instant(dt, h * 60, BASE_TZ);
+      if (s[h].student === me.name && t + HOUR > now) out.push({ ...s[h], dt, h, t });
+    }
+  }
+  return out;
+}
+const whenText = t => { const v = tzParts(tz, t); return `${DAYS[dayIdx(parseIso(v.date))]}, ${longDate(v.date)} · ${hm(v.min)}`; };
+const kyivNote = h => tz === BASE_TZ ? '' : `за Києвом ${pad(h)}:00`;
+const histList = list => list.length ? `<ul>${list.map(x => `<li><span>${longDate(x.date)}</span>
+  ${x.kind && x.kind !== 'regular' ? `<span class="tag k-${x.kind}">${KIND[x.kind]}</span>` : ''}
+  <b class="st ${x.status}">${LABEL[x.status]}</b></li>`).join('')}</ul>` : '<p class="muted">Ще немає відміток</p>';
+
 function renderMe() {
   const box = $('#me');
   if (!me) { box.hidden = true; return; }
   box.hidden = false;
-  const today = iso(new Date()), nowH = new Date().getHours();
-  let next = null;
-  for (let i = 0; i < 21 && !next; i++) {
-    const dt = addDays(today, i), s = slotsOn(dt);
-    const h = Object.keys(s).map(Number).sort((a, b) => a - b)
-      .find(h => s[h].student === me.name && !s[h].cancelled && (i > 0 || h >= nowH));
-    if (h !== undefined) next = { dt, h, kind: s[h].kind };
-  }
+  const up = myLessons(28), next = up.find(x => !x.cancelled), nv = next && tzParts(tz, next.t);
   const r = me.remaining ?? 0, paid = me.paid || 0;
   const pct = paid > 0 ? Math.max(0, Math.min(100, r / paid * 100)) : 0;
   // Кнопка Meet: за 10 хв до початку і до кінця уроку
-  const mins = next ? (new Date(`${next.dt}T${pad(next.h)}:00`) - Date.now()) / 60000 : null;
+  const mins = next ? (next.t - Date.now()) / 60000 : null;
   const live = next && mins <= 10 && mins > -60;
   const join = live
     ? `<a class="btn join" href="${MEET}" target="_blank" rel="noopener">🎥 ${mins > 0 ? `Приєднатися · старт через ${Math.ceil(mins)} хв` : 'Приєднатися до уроку'}</a>`
     : next ? `<p class="muted small">Кнопка входу на урок з'явиться тут за 10 хв до початку</p>` : '';
   const hw = (me.notes || []).find(x => x.homework), last = (me.notes || [])[0];
   const badges = me.badges || [];
+  $('#meHi').innerHTML = `
+    <span class="avatar big" style="--h:${hue(me.name)}">${esc(me.name[0])}</span>
+    <div><h2>Привіт, ${esc(me.name)}!</h2><p class="muted">Твій кабінет учня</p></div>
+    <button class="x" id="forget" title="Це не я" aria-label="Закрити кабінет">✕</button>`;
   $('#meMain').innerHTML = `
-    <div class="me-hi">
-      <span class="avatar big" style="--h:${hue(me.name)}">${esc(me.name[0])}</span>
-      <div><h2>Привіт, ${esc(me.name)}!</h2><p class="muted">Твоя особиста сторінка</p></div>
-      <button class="x" id="forget" title="Це не я" aria-label="Закрити особисту сторінку">✕</button>
-    </div>
     <div class="me-body">
       <div class="ring${r <= 0 ? ' bad' : r <= 2 ? ' warn' : ''}" style="--p:${pct}">
         <strong>${r}</strong><small>${r === 1 ? 'урок' : r >= 2 && r <= 4 ? 'уроки' : 'уроків'}<br>залишилось</small>
       </div>
       <div class="me-next">
         <p class="label">Наступне заняття</p>
-        ${next ? `<p class="when">${DAYS[dayIdx(parseIso(next.dt))]}, ${longDate(next.dt)}<b>${pad(next.h)}:00</b></p>
+        ${next ? `<p class="when">${DAYS[dayIdx(parseIso(nv.date))]}, ${longDate(nv.date)}<b>${hm(nv.min)}</b></p>
+          ${tz !== BASE_TZ ? `<p class="muted small">${esc(tzName(tz))} · ${kyivNote(next.h)}</p>` : ''}
           ${next.kind !== 'regular' ? `<span class="tag k-${next.kind}">${KIND[next.kind]}</span>` : ''}`
           : '<p class="when">Поки не заплановано</p>'}
         ${join}
@@ -193,9 +253,7 @@ function renderMe() {
       </div>
       <div class="me-hist">
         <p class="label">Останні заняття</p>
-        ${(me.history || []).length ? `<ul>${me.history.map(x => `<li><span>${longDate(x.date)}</span>
-          ${x.kind && x.kind !== 'regular' ? `<span class="tag k-${x.kind}">${KIND[x.kind]}</span>` : ''}
-          <b class="st ${x.status}">${LABEL[x.status]}</b></li>`).join('')}</ul>` : '<p class="muted">Ще немає відміток</p>'}
+        ${histList((me.history || []).slice(0, 5))}
       </div>
     </div>
     <div class="me-extra">
@@ -212,11 +270,87 @@ function renderMe() {
           : '<p class="muted small">Перша нагорода — після першого уроку 🎉</p>'}
       </div>
     </div>`;
+  $('#meLessons').innerHTML = `<div class="me-hist">
+      <p class="label">Найближчі 4 тижні${tz !== BASE_TZ ? ` · час: ${esc(tzName(tz))}` : ''}</p>
+      ${up.length ? `<ul>${up.map(x => `<li${x.cancelled ? ' class="off"' : ''}><span>${whenText(x.t)}${tz !== BASE_TZ ? ` <small class="muted">(${kyivNote(x.h)})</small>` : ''}</span>
+        ${x.cancelled ? `<b class="st absent">${x.to ? 'перенесено' : 'скасовано'}</b>` : x.kind !== 'regular' ? `<span class="tag k-${x.kind}">${KIND[x.kind]}</span>` : ''}</li>`).join('')}</ul>`
+        : '<p class="muted">Поки нічого не заплановано</p>'}
+      <p class="label lbl-gap">Історія відвідувань</p>
+      ${histList(me.history || [])}
+    </div>`;
+  const ns = me.notes || [];
+  $('#meHw').innerHTML = ns.length ? ns.map(x => `<div class="hw-item">
+      <p class="muted small"><b>${longDate(x.date)}</b>${x.topic ? ' · тема: ' + esc(x.topic) : ''}</p>
+      ${x.homework ? `<p class="hw-text">${esc(x.homework)}</p>` : '<p class="muted small">Без домашнього завдання</p>'}</div>`).join('')
+    : '<p class="muted">Тут з\'являться теми уроків і домашні завдання</p>';
   $('#forget').onclick = () => {
     try { localStorage.removeItem('rozklad-token'); } catch {}
     me = null; history.replaceState(null, '', location.pathname); $('#search').value = ''; render();
   };
+  renderMeChat();
   renderPhotoGrid($('#photoGrid'), token, mePhotos, false);
+}
+
+// ---------- Чат учень ↔ викладач: public/{код}/messages ----------
+const byTime = list => list.sort((a, b) => ms(a.created) - ms(b.created));
+function renderMsgs(el, list, mine, key) {
+  const stick = el.scrollHeight - el.scrollTop - el.clientHeight < 60 || el.dataset.k !== key + list.length;
+  let day = '';
+  el.innerHTML = list.length ? list.map(m => {
+    const t = new Date(ms(m.created) || Date.now()), d = iso(t);
+    const sep = d !== day ? `<p class="chat-day">${longDate(d)}</p>` : '';
+    day = d;
+    return `${sep}<div class="msg${m.by === mine ? ' mine' : ''}">${esc(m.text)}<small>${t.toLocaleTimeString('uk', { hour: '2-digit', minute: '2-digit' })}</small></div>`;
+  }).join('') : `<p class="empty">${mine === 'student' ? 'Напиши викладачу: питання про урок, ДЗ чи перенос заняття.' : 'Ще немає повідомлень'}</p>`;
+  if (stick) el.scrollTop = el.scrollHeight;
+  el.dataset.k = key + list.length;
+}
+
+let meSeen = 0; // час останнього прочитаного повідомлення (у цьому браузері)
+function renderMeChat() {
+  const list = byTime(Object.values(meMsgs));
+  if (!$('#tab-me-chat').hidden && list.length && ms(list.at(-1).created) > meSeen) {
+    meSeen = ms(list.at(-1).created);
+    try { localStorage.setItem('rozklad-chat-' + token, meSeen); } catch {}
+  }
+  const unread = list.filter(m => m.by === 'teacher' && ms(m.created) > meSeen).length;
+  $('#meUnread').hidden = !unread;
+  $('#meUnread').textContent = unread;
+  renderMsgs($('#meChat'), list, 'student', '');
+}
+
+let chatName = null;
+function renderChats() {
+  const byTok = {};
+  for (const m of Object.values(msgs)) (byTok[m.token] ||= []).push(m);
+  const people = Object.entries(students).filter(([, st]) => st.token).map(([n, st]) => {
+    const list = byTime(byTok[st.token] || []);
+    return { n, list, last: list.at(-1), unread: list.filter(m => m.by === 'student' && ms(m.created) > (st.seenChat || 0)).length };
+  }).sort((a, b) => ms(b.last?.created) - ms(a.last?.created) || a.n.localeCompare(b.n, 'uk'));
+  const total = people.reduce((s, p) => s + p.unread, 0);
+  $('#chatCount').hidden = !total;
+  $('#chatCount').textContent = total;
+  if (!people.some(p => p.n === chatName)) chatName = people[0]?.n || null;
+  $('#chatList').innerHTML = people.length ? people.map(p => `<button class="chat-item${p.n === chatName ? ' on' : ''}" data-chat="${esc(p.n)}">
+      <span class="avatar" style="--h:${hue(p.n)}">${esc(p.n[0])}</span>
+      <span><b>${esc(p.n)}</b><small>${p.last ? (p.last.by === 'teacher' ? 'Ви: ' : '') + esc(p.last.text) : 'Ще немає повідомлень'}</small></span>
+      ${p.unread ? `<b class="n">${p.unread}</b>` : ''}</button>`).join('')
+    : '<p class="empty">Чат з\'являється, коли в учня є кабінет: «Учні» → «+ Кабінет учня».</p>';
+  const cur = people.find(p => p.n === chatName);
+  $('#chatWith').textContent = cur ? `Чат: ${cur.n}` : '';
+  $('#tChatForm').hidden = !cur;
+  renderMsgs($('#tChat'), cur?.list || [], 'teacher', chatName);
+  // прочитано, коли розмова відкрита; max — щоб розбіжність годинників не зациклила запис
+  if (cur?.unread && !$('#tab-chats').hidden && document.visibilityState === 'visible')
+    run(F.setDoc(F.doc(db, 'students', cur.n), { seenChat: Math.max(Date.now(), ms(cur.last.created) + 1) }, { merge: true }));
+}
+
+function sendMsg(form, tok, by) {
+  const ta = form.elements['text'], text = ta.value.trim().slice(0, 1000);
+  if (!text || !tok || !configured || !F) return;
+  ta.value = '';
+  F.addDoc(F.collection(db, 'public', tok, 'messages'), { by, text, created: F.serverTimestamp() })
+    .catch(e => { ta.value ||= text; toast('Не надіслано: ' + e.message); });
 }
 
 // ---------- Фото (учень завантажує на своїй сторінці, викладач бачить у «Учнях») ----------
@@ -270,10 +404,12 @@ function openPhotos(name) {
 }
 
 function render() {
-  const q = $('#search').value.trim().toLowerCase();
+  const q = $('#search').value.trim().toLowerCase(), v = viewWeek(), memo = {}, on = d => memo[d] ||= slotsOn(d);
+  $('#tzLabel').textContent = tz === BASE_TZ ? 'Київський час' : `${tzName(tz)} · ${gmt(tz)}`;
+  $('#tzBtn').classList.toggle('on', tz !== BASE_TZ);
   renderWeek();
-  renderGrid(q);
-  renderAgenda(q);
+  renderGrid(q, v, on);
+  renderAgenda(q, v, on);
   renderMe();
   if (isTeacher) renderTeacher();
 }
@@ -298,6 +434,7 @@ function renderTeacher() {
   renderStudents(recs, rem);
   renderStats();
   renderRequests();
+  renderChats();
   syncPublic(recs, rem);
 }
 
@@ -370,6 +507,7 @@ function renderStudents(recs, rem) {
         <div class="packs">${PACKS.map((p, i) => `<button class="pack" data-pack="${i}" data-name="${esc(n)}"><b>+${p.n}</b> ${money(p.sum)}</button>`).join('')}</div>
         ${r <= 3 && (st.paid || 0) > 0 ? `<button class="ghost link-btn warnbtn" data-msg="remind" data-name="${esc(n)}">💬 Нагадування</button>` : ''}
         <button class="ghost link-btn" data-msg="report" data-name="${esc(n)}">📊 Звіт</button>
+        ${st.token ? `<button class="ghost link-btn" data-chatwith="${esc(n)}">💬 Чат</button>` : ''}
         ${myPhotos.length ? `<button class="ghost link-btn${fresh ? ' fresh' : ''}" data-photos="${esc(n)}">📷 ${myPhotos.length}${fresh ? ` · нових ${fresh}` : ''}</button>` : ''}
         ${st.token
           ? `<a class="ghost link-btn" href="?s=${esc(st.token)}" target="_blank" rel="noopener" title="Відкрити особисту сторінку учня">Кабінет ↗</a>
@@ -493,8 +631,8 @@ function syncPublic(recs, rem) {
     if (!st.token) continue;
     const pr = progress(recs[n] || []);
     const data = { name: n, paid: st.paid || 0, remaining: rem(n),
-      history: (recs[n] || []).slice(0, 8).map(x => ({ date: x.date, status: x.status, kind: x.kind || 'regular' })),
-      notes: notesOf(n).slice(0, 5).map(x => ({ date: x.date, topic: x.topic || '', homework: x.homework || '' })),
+      history: (recs[n] || []).slice(0, 30).map(x => ({ date: x.date, status: x.status, kind: x.kind || 'regular' })),
+      notes: notesOf(n).slice(0, 20).map(x => ({ date: x.date, topic: x.topic || '', homework: x.homework || '' })),
       streak: pr.streak, present: pr.present, badges: [...autoBadges(pr), ...(st.badges || [])] };
     const json = JSON.stringify(data);
     if (synced[st.token] === json) continue;
@@ -618,10 +756,70 @@ $('#nextDay').onclick = () => shiftDay(1);
 $('#prevMonth').onclick = () => { statMonth = shiftMonth(statMonth, -1); render(); };
 $('#nextMonth').onclick = () => { statMonth = shiftMonth(statMonth, 1); render(); };
 
-document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
-  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
-  document.querySelectorAll('.tab').forEach(t => t.hidden = t.id !== 'tab-' + b.dataset.tab);
+// Вкладки: кожен набір (кабінет учня / викладача) перемикає лише свою секцію
+function showTab(tl, name) {
+  const sec = tl.closest('section');
+  tl.querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.tab === name));
+  sec.querySelectorAll('.tab').forEach(t => t.hidden = t.id !== 'tab-' + name);
+  render();
+  sec.querySelectorAll('.tab:not([hidden]) .chat-msgs').forEach(c => c.scrollTop = c.scrollHeight);
+}
+document.querySelectorAll('.tabs').forEach(tl => tl.onclick = e => { const b = e.target.closest('button[data-tab]'); if (b) showTab(tl, b.dataset.tab); });
+
+// Чати
+$('#meChatForm').onsubmit = e => { e.preventDefault(); sendMsg(e.target, token, 'student'); };
+$('#tChatForm').onsubmit = e => { e.preventDefault(); sendMsg(e.target, students[chatName]?.token, 'teacher'); };
+// Enter — надіслати, Shift+Enter — новий рядок
+document.querySelectorAll('.chat-form textarea').forEach(t => t.onkeydown = e => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); t.form.requestSubmit(); }
 });
+$('#chatList').onclick = e => {
+  const b = e.target.closest('[data-chat]');
+  if (!b) return;
+  chatName = b.dataset.chat;
+  render();
+  $('#tChat').scrollTop = $('#tChat').scrollHeight;
+  $('#tChatForm').elements['text'].focus();
+};
+document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && render());
+
+// Часовий пояс: пошук по назві міста (укр/англ), країні чи GMT+N
+let zoneList;
+function zones() {
+  if (zoneList) return zoneList;
+  let all = [];
+  try { all = Intl.supportedValuesOf('timeZone'); } catch {}
+  const now = Date.now();
+  zoneList = [...new Set([BASE_TZ, LOCAL_TZ, ...Object.keys(TZ_UK), ...all].map(norm))].filter(validTz)
+    .map(z => ({ z, off: offMin(z, now), hay: `${z} ${TZ_UK[z] || ''} ${z === BASE_TZ ? 'Київ Україна Kyiv' : ''} ${gmt(z)}`.replace(/_/g, ' ').toLowerCase() }))
+    .sort((a, b) => a.off - b.off || a.z.localeCompare(b.z));
+  return zoneList;
+}
+function renderTz() {
+  const q = $('#tzQ').value.trim().toLowerCase().replace(/utc/g, 'gmt').replace(/_/g, ' '), now = Date.now();
+  const mine = x => x.z === BASE_TZ || x.z === LOCAL_TZ;
+  const list = q ? zones().filter(x => x.hay.includes(q)) : [...zones().filter(mine), ...zones().filter(x => !mine(x))];
+  $('#tzList').innerHTML = list.map(({ z }) => `<button data-tz="${esc(z)}"${z === tz ? ' class="on"' : ''}>
+      <span><b>${esc(tzName(z))}</b>${z === BASE_TZ ? ' <i class="tag k-regular">розклад</i>' : z === LOCAL_TZ ? ' <i class="tag k-moved">мій</i>' : ''}<small>${esc(z.replace(/_/g, ' '))}</small></span>
+      <span class="tzr"><b>${hm(tzParts(z, now).min)}</b><small>${gmt(z)}</small></span></button>`).join('')
+    || '<p class="empty">Нічого не знайдено. Спробуй назву міста англійською (напр. Warsaw) або GMT+1</p>';
+}
+$('#tzBtn').onclick = () => {
+  $('#tzQ').value = '';
+  renderTz();
+  $('#tzDlg').showModal();
+  $('#tzList .on')?.scrollIntoView({ block: 'center' });
+};
+$('#tzQ').oninput = renderTz;
+$('#tzList').onclick = e => {
+  const b = e.target.closest('[data-tz]');
+  if (!b) return;
+  tz = b.dataset.tz;
+  try { localStorage.setItem('rozklad-tz', tz); } catch {}
+  $('#tzDlg').close();
+  resetDay();
+  render();
+};
 
 $('#freeBtn').onclick = () => {
   const on = document.body.classList.toggle('free');
@@ -640,7 +838,7 @@ $('#grid').onclick = $('#agenda').onclick = e => {
     if (!configured) return toast('Спочатку підключи Firebase');
     const f = $('#bookForm');
     f.dataset.date = date; f.dataset.hour = h;
-    $('#bookSlot').textContent = `${DAYS[dayIdx(parseIso(date))]}, ${longDate(date)} о ${pad(h)}:00`;
+    $('#bookSlot').textContent = whenText(instant(date, h * 60, BASE_TZ)) + (tz !== BASE_TZ ? ` (${kyivNote(h)})` : '');
     return $('#book').showModal();
   }
   if (isTeacher) openCell(date, h);
@@ -770,6 +968,8 @@ $('#students').onclick = async e => {
   }
   const ub = e.target.closest('[data-unbadge]');
   if (ub) return run(F.setDoc(F.doc(db, 'students', ub.dataset.name), { badges: F.arrayRemove(ub.dataset.unbadge) }, { merge: true }));
+  const cw = e.target.closest('[data-chatwith]');
+  if (cw) { chatName = cw.dataset.chatwith; return showTab($('#panel .tabs'), 'chats'); }
   const ph = e.target.closest('[data-photos]');
   if (ph) return openPhotos(ph.dataset.photos);
   const b = e.target.closest('[data-link]');
@@ -816,6 +1016,7 @@ let token = new URLSearchParams(location.search).get('s');
 // у браузері особиста сторінка відкривається тільки за посиланням з ?s=
 const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 try { token ? localStorage.setItem('rozklad-token', token) : standalone && (token = localStorage.getItem('rozklad-token')); } catch {}
+try { meSeen = +localStorage.getItem('rozklad-chat-' + token) || 0; } catch {}
 
 if (!configured) {
   lessons = { ...SEED };
@@ -850,6 +1051,9 @@ if (!configured) {
       if (token) F.onSnapshot(F.collection(db, 'public', token, 'photos'), s => {
         mePhotos = {}; s.forEach(d => mePhotos[d.id] = d.data()); render();
       }, () => {});
+      if (token) F.onSnapshot(F.collection(db, 'public', token, 'messages'), s => {
+        meMsgs = {}; s.forEach(d => meMsgs[d.id] = d.data({ serverTimestamps: 'estimate' })); render();
+      }, () => {});
 
       let unsub = [];
       A.onAuthStateChanged(auth, user => {
@@ -872,6 +1076,9 @@ if (!configured) {
             // метадані всіх фото учнів (самі картинки вантажаться лише при перегляді)
             F.onSnapshot(F.collectionGroup(db, 'photos'), s => {
               photos = {}; s.forEach(d => photos[d.id] = { ...d.data(), token: d.ref.parent.parent.id }); render();
+            }, e => toast(e.message)),
+            F.onSnapshot(F.collectionGroup(db, 'messages'), s => {
+              msgs = {}; s.forEach(d => msgs[d.id] = { ...d.data({ serverTimestamps: 'estimate' }), token: d.ref.parent.parent.id }); render();
             }, e => toast(e.message)),
           ];
         }
