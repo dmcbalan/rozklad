@@ -36,6 +36,7 @@ const remaining = (paid, records) => (paid || 0) - records.filter(r => CHARGED.i
 console.assert(remaining(8, [{ status: 'present' }, { status: 'absent' }, { status: 'excused' }]) === 6, 'remaining()');
 
 const MEET = 'https://meet.google.com/fyx-nwim-wno'; // одне посилання для всіх уроків
+const TG = 'https://t.me/dmcbalan'; // Telegram викладача — для батьків
 // Значки, які викладач видає вручну
 // Медалі: [назва, емодзі, рівень: b — бронза, s — срібло, g — золото, p — особлива, розділ]. Рядок «назва емодзі» — id у базі.
 const MEDALS = [
@@ -192,7 +193,7 @@ function slotsOn(date) {
   for (const h of HOURS) if (lessons[`${d}-${h}`]) res[h] = { student: lessons[`${d}-${h}`], kind: 'regular' };
   for (const [id, c] of Object.entries(changes)) {
     if (c.date !== date) continue;
-    if (c.kind === 'trial' && c.done) continue; // проведений пробний знімається з розкладу, лишається в «Заявки → Пробні»
+    if (c.kind === 'trial' && c.done) continue; // проведений пробний знімається з розкладу, лишається у вкладці «🎁 Пробні»
     if (c.kind === 'cancel') { if (res[c.hour]?.kind === 'regular') Object.assign(res[c.hour], { cancelled: id, to: c.to }); }
     else res[c.hour] = { student: c.student, kind: c.kind, id, from: c.from, note: c.note };
   }
@@ -578,7 +579,7 @@ function forget() {
 
 // ---------- Нижнє меню на телефоні: екрани Розклад / Чат / Профіль / Налаштування ----------
 // Екран у викладача: 'tab:marks' — його кабінет з однією вкладкою на весь екран
-const VIEWS = ['schedule', 'chat', 'profile', 'settings', 'tab:marks', 'tab:students', 'tab:chats', 'tab:hw', 'tab:stats', 'tab:requests'];
+const VIEWS = ['schedule', 'chat', 'profile', 'settings', 'tab:marks', 'tab:students', 'tab:chats', 'tab:hw', 'tab:stats', 'tab:requests', 'tab:trials', 'tab:contest'];
 let meMissing = false, curView = 'schedule';
 function setView(v) {
   curView = v;
@@ -605,9 +606,9 @@ function renderNav() {
   const teacherNav = isTeacher && !me;
   const items = teacherNav
     ? [['schedule', 'cal', 'Розклад'], ['tab:marks', 'check', 'Відмітки'], ['tab:students', 'users', 'Учні'], ['tab:chats', 'chat', 'Чати', cnt('#chatCount')],
-       ['settings', 'more', 'Ще', cnt('#hwCount') + cnt('#reqCount')]]
+       ['settings', 'more', 'Ще', cnt('#hwCount') + cnt('#reqCount') + cnt('#trialCount')]]
     : [['schedule', 'cal', 'Розклад'], ['chat', 'chat', 'Чат', cnt('#meUnread')], ['profile', 'user', 'Профіль'], ['settings', 'gear', 'Налаштування']];
-  const active = ['tab:hw', 'tab:stats', 'tab:requests'].includes(curView) ? 'settings' : curView;
+  const active = ['tab:hw', 'tab:stats', 'tab:requests', 'tab:trials', 'tab:contest'].includes(curView) ? 'settings' : curView;
   $('.bnav').innerHTML = items.map(([v, i, t, n]) => `<button data-view="${v}"${v === active ? ' class="on"' : ''}><svg viewBox="0 0 24 24">${NAV_ICON[i]}</svg>${t}${n ? `<b>${n}</b>` : ''}</button>`).join('');
   $('#signin').hidden = !!me || teacherNav;
   $('#signinErr').hidden = !(token && meMissing);
@@ -616,6 +617,8 @@ function renderNav() {
   $('#setList').innerHTML = [
     teacherNav && ['go:tab:hw', '📬', 'ДЗ на перевірку', cnt('#hwCount') ? `нових ${cnt('#hwCount')}` : ''],
     teacherNav && ['go:tab:requests', '📝', 'Заявки', cnt('#reqCount') ? `нових ${cnt('#reqCount')}` : ''],
+    teacherNav && ['go:tab:trials', '🎁', 'Пробні уроки', cnt('#trialCount') ? `заплановано ${cnt('#trialCount')}` : ''],
+    teacherNav && ['go:tab:contest', '🏆', 'Челендж місяця', contest[monthKey()] ? contest[monthKey()].title : 'не оголошено'],
     teacherNav && ['go:tab:stats', '📊', 'Статистика', ''],
     ['notif', '🔔', 'Сповіщення на пристрої', perm],
     ['theme', '🌓', 'Тема', darkNow() ? 'Темна' : 'Світла'],
@@ -623,6 +626,7 @@ function renderNav() {
     isWinter() && ['snow', '❄️', 'Сніг на сайті', snowOn() ? 'увімкнено' : 'вимкнено'],
     installEvt && ['install', '📲', 'Встановити як застосунок', ''],
     me && ['logout', '🚪', 'Вийти з кабінету', me.name],
+    !teacherNav && ['tg', '✈️', 'Написати викладачу в Telegram', '@dmcbalan'],
     ['teacher', '🎓', $('#login').textContent, ''],
   ].filter(Boolean).map(([a, i, t, v]) => `<button data-set="${a}"><span>${i}</span><b>${esc(t)}</b><small>${esc(v)}</small><i>›</i></button>`).join('');
 }
@@ -907,15 +911,27 @@ function renderRequests() {
     </div>`).join('') : '<p class="empty">Нових заявок немає. Учні залишають їх через кнопку «Вільні вікна» або «Пробний урок».</p>';
   const trials = Object.entries(changes).filter(([, c]) => c.kind === 'trial')
     .sort((a, b) => (b[1].date + pad(b[1].hour)).localeCompare(a[1].date + pad(a[1].hour)));
-  $('#requests').innerHTML += `<h4 class="sep">🎁 Пробні уроки</h4>` + (trials.length ? trials.map(([id, c]) => `
+  renderTrials(trials);
+}
+
+// Вкладка «🎁 Пробні»: підсумок і всі пробні — заплановані зверху
+function renderTrials(trials) {
+  const plan = trials.filter(([, c]) => !c.done), done = trials.filter(([, c]) => c.done), yes = done.filter(([, c]) => c.result === 'yes').length;
+  $('#trialCount').hidden = !plan.length;
+  $('#trialCount').textContent = plan.length;
+  const list = [...plan.reverse(), ...done];
+  $('#trials').innerHTML = `<div class="trial-sum"><div><b>${plan.length}</b><small>заплановано</small></div><div><b>${done.length}</b><small>проведено</small></div>
+      <div><b>${yes}</b><small>продовжили${done.length ? ` · ${Math.round(yes / done.length * 100)}%` : ''}</small></div></div>`
+    + (list.length ? list.map(([id, c]) => `
     <div class="req">
       <span class="avatar" style="--h:${hue(c.student)}">${esc(c.student[0] || '?')}</span>
       <div class="who"><b>${esc(c.student)}</b>
         <small>${DAYS[dayIdx(parseIso(c.date))]}, ${longDate(c.date)} · ${pad(c.hour)}:00 · ${c.done ? TRIAL_RES[c.result] || 'проведено' : 'заплановано'}</small>
         ${c.note ? `<small>${esc(c.note)}</small>` : ''}${c.ref ? `<small>🎁 Порадив(ла): ${esc(refName(c.ref) || 'код ' + c.ref)}</small>` : ''}</div>
       <div class="req-actions"><button class="ghost" data-trial="${id}">${c.done ? 'Змінити' : 'Підсумок'}</button></div>
-    </div>`).join('') : '<p class="muted small">Ще не було пробних. Додай через клітинку розкладу («+ Пробний») або прийми заявку.</p>');
+    </div>`).join('') : '<p class="empty">Ще не було пробних. Додай через клітинку розкладу («+ Пробний») або прийми заявку з кнопки «🎁 Пробний урок».</p>');
 }
+$('#trials').onclick = e => { const t = e.target.closest('[data-trial]'); if (t) openTrial(t.dataset.trial); };
 
 // ----- Готові повідомлення батькам (копіюються в буфер) -----
 const lessonsWord = n => plural(n, 'заняття', 'заняття', 'занять');
@@ -1018,7 +1034,7 @@ function openTrial(id) {
       .map(([n, st]) => `<option value="${refCode(st.token)}"${c.ref === refCode(st.token) ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
     <label class="check"><input type="checkbox" id="trGift"${c.gift ? ' disabled' : c.ref ? ' checked' : ''}> 🎁 Подарунок від друга: ${giftText()} ${c.gift ? '(вже нараховано)' : '(якщо продовжує)'}</label>
     <label class="fl">Поповнення абонемента<select id="trPack"><option value="">Без оплати зараз</option>${PACKS.map((p, i) => `<option value="${i}">${p.n} ${lessonsWord(p.n)} — ${money(p.sum)}</option>`).join('')}</select></label>
-    <p class="muted small">«Продовжує» додає учня в «Учні», оплата йде в абонемент. Пробний зникає з розкладу й лишається в «Заявки → Пробні уроки».</p>
+    <p class="muted small">«Продовжує» додає учня в «Учні», оплата йде в абонемент. Пробний зникає з розкладу й лишається у вкладці «🎁 Пробні».</p>
     <div class="actions"><button data-act="trialDone" class="primary">✅ Проведено</button><button data-act="trialDel" class="ghost danger">Видалити пробний</button></div>`;
   if (!dlg.open) dlg.showModal();
 }
@@ -2195,8 +2211,8 @@ function renderContestMe() {
   if (!c) return;
   const sent = Object.values(mePhotos).some(p => (p.caption || '').startsWith('🏆') && iso(new Date(ms(p.created) || Date.now())).slice(0, 7) === m);
   const inGallery = Object.values(contestEntries).length && Object.keys(contestEntries).some(id => mePhotos[id]);
-  const html = `<span class="ch-cup">🏆</span><div><small>Челендж місяця</small><b>${esc(c.title)}</b>${c.desc ? `<p>${esc(c.desc)}</p>` : ''}
-    <p class="small">${c.winner ? `👑 Учень місяця — ${esc(c.winnerName || '')}` : inGallery ? '✅ Твоя робота в галереї! Поклич рідних і друзів проголосувати' : sent ? '⏳ Роботу надіслано — викладач додасть її в галерею' : 'Зроби роботу, сфотографуй або зроби скриншот і надішли — найкраща отримає медаль «Учень місяця» 👑'}</p>
+  const html = `<span class="ch-cup">🏆</span><div><small>Челендж місяця</small><b>${esc(c.title)}</b>${c.desc ? `<details class="ch-more"><summary>📋 Що зробити у твоєму курсі</summary><p class="ch-desc">${esc(c.desc)}</p></details>` : ''}
+    <p class="small">${c.winner ? `👑 Учень місяця — ${esc(c.winnerName || '')}` : inGallery ? '✅ Твоя робота в галереї! Поклич рідних і друзів проголосувати' : sent ? '⏳ Роботу надіслано — викладач додасть її в галерею' : c.desc ? '' : 'Зроби роботу, сфотографуй або зроби скриншот і надішли — найкраща отримає медаль «Учень місяця» 👑'}</p>
     <div class="ch-btns">${c.winner ? '' : `<button class="btn sm" data-contestsend>📷 ${sent ? 'Надіслати ще' : 'Надіслати роботу'}</button>`}<a class="ghost link-btn" href="?c=${m}" target="_blank" rel="noopener">Галерея й голосування ↗</a></div></div>`;
   if (box._html !== html) box.innerHTML = box._html = html;
 }
@@ -2232,13 +2248,55 @@ async function toggleContest(n, id, tok) {
   } catch (e) { toast(errText(e)); }
 }
 
+// Готові теми челенджу: кожен курс робить своє — тож можна порівнювати гру, сайт і відео в одній галереї
+const CONTEST_END = 'Надішли скриншот, фото або посилання на роботу до кінця місяця. Найкраща робота — «Учень місяця» 👑';
+const CONTEST_IDEAS = [
+  ['Зимове диво ❄️', ['Кожен робить зимову роботу у своєму курсі:',
+    '🎮 Ігри (Scratch, Roblox, Kodu, Construct) — гра чи анімація про зиму',
+    '🐍 Python / C++ — програма-привітання або міні-гра «Сніжки»',
+    '🌐 Сайти — новорічна сторінка-листівка',
+    '🎨 Figma — дизайн святкової листівки',
+    '🎬 CapCut — зимове відео до 30 секунд',
+    '🤖 ШІ — зимова казка або картинка, створена з ШІ',
+    '🧊 Tinkercad / Arduino — 3D-сніговик, ялинка чи гірлянда, що блимає',
+    '💻 Інформатика — презентація «Мій ідеальний зимовий день»']],
+  ['Моя мрія 🚀', ['Покажи свою мрію у своєму курсі:',
+    '🎮 Ігри — герой іде до мрії, а на шляху перешкоди',
+    '🐍 Python / C++ — тест «Яка професія тобі пасує?»',
+    '🌐 Сайти — сторінка про твою мрію',
+    '🎨 Figma — постер або екран застосунку мрії',
+    '🎬 CapCut — відео «Ким я хочу стати»',
+    '🤖 ШІ — картинка тебе в майбутньому',
+    '🧊 Tinkercad / Arduino — модель будинку, машини чи робота мрії',
+    '💻 Інформатика — презентація про свою мрію']],
+  ['Корисна штука 💡', ['Зроби щось, що допоможе людям або тобі самому:',
+    '🎮 Ігри — гра, яка чогось навчає (таблиця множення, англійські слова)',
+    '🐍 Python / C++ — калькулятор, планувальник чи генератор паролів',
+    '🌐 Сайти — сторінка для притулку тварин або гуртка',
+    '🎨 Figma — дизайн корисного застосунку',
+    '🎬 CapCut — відеоінструкція «Як зробити…»',
+    '🤖 ШІ — розумні підказки для навчання',
+    '🧊 Tinkercad / Arduino — корисний гаджет або 3D-модель',
+    '💻 Інформатика — пам\'ятка «Безпека в інтернеті»']],
+  ['Мій улюблений герой 🦸', ['Створи роботу про свого улюбленого героя — з книжки, мультика чи вигаданого:',
+    '🎮 Ігри — гра з цим героєм',
+    '🐍 Python / C++ — текстова пригода героя',
+    '🌐 Сайти — фан-сторінка героя',
+    '🎨 Figma — постер або комікс',
+    '🎬 CapCut — трейлер про героя',
+    '🤖 ШІ — комікс або казка з ШІ',
+    '🧊 Tinkercad / Arduino — 3D-фігурка героя',
+    '💻 Інформатика — презентація-досьє героя']],
+].map(([t, lines]) => ({ t, d: [...lines, '', CONTEST_END].join('\n') }));
+console.assert(CONTEST_IDEAS.every(x => x.t.length <= 80 && x.d.length <= 800), 'CONTEST_IDEAS fit');
 // Викладач: тема місяця, роботи з оцінками, переможець
 function renderContestAdmin() {
   const m = contestMonth, c = contest[m], el = $('#contestAdmin'), list = contestList();
   const html = `<h4 class="sep">🏆 Челендж місяця</h4>
     <form class="contest-form"><label class="fl">Місяць<input type="month" name="m" value="${m}"></label>
+      <label class="fl">Готова тема для всіх курсів<select name="preset"><option value="">— обрати, і поля заповняться —</option>${CONTEST_IDEAS.map((x, i) => `<option value="${i}">${esc(x.t)}</option>`).join('')}</select></label>
       <label class="fl">Тема<input name="title" maxlength="80" value="${esc(c?.title || '')}" placeholder="Напр.: Зроби гру про зиму" required></label>
-      <label class="fl">Опис (необов'язково)<textarea name="desc" maxlength="300" rows="2" placeholder="Що зробити, до якого числа">${esc(c?.desc || '')}</textarea></label>
+      <label class="fl">Опис (необов'язково)<textarea name="desc" maxlength="800" rows="6" placeholder="Що зробити, до якого числа">${esc(c?.desc || '')}</textarea></label>
       <div class="actions"><button class="btn sm">${c ? 'Зберегти' : 'Оголосити челендж'}</button>
         ${c ? `<a class="ghost link-btn" href="?c=${m}" target="_blank" rel="noopener">Галерея ↗</a><button type="button" class="ghost link-btn" data-copycontest>🔗 Посилання для батьків</button>` : ''}</div></form>
     ${!c ? '<p class="muted small">Після оголошення всі учні отримають сповіщення, а на головній з\'явиться банер «Голосуй».</p>'
@@ -2247,10 +2305,14 @@ function renderContestAdmin() {
       : '<p class="muted small">Робіт ще немає. Учні надсилають їх з кабінету («🏆 Надіслати роботу»), а ти додаєш кнопкою «🏆 На челендж» у фото учня («Учні» → 📷).</p>'}`;
   if (el._html !== html) el.innerHTML = el._html = html;
 }
-$('#contestAdmin').addEventListener('change', e => { if (e.target.name === 'm' && /^\d{4}-\d{2}$/.test(e.target.value)) watchEntries(e.target.value); });
+$('#contestAdmin').addEventListener('change', e => {
+  if (e.target.name === 'm' && /^\d{4}-\d{2}$/.test(e.target.value)) watchEntries(e.target.value);
+  const idea = e.target.name === 'preset' && CONTEST_IDEAS[e.target.value];
+  if (idea) { const f = e.target.form; f.elements['title'].value = idea.t; f.elements['desc'].value = idea.d; }
+});
 $('#contestAdmin').addEventListener('submit', e => {
   e.preventDefault();
-  const f = e.target, m = f.elements['m'].value, title = f.elements['title'].value.trim().slice(0, 80), desc = f.elements['desc'].value.trim().slice(0, 300);
+  const f = e.target, m = f.elements['m'].value, title = f.elements['title'].value.trim().slice(0, 80), desc = f.elements['desc'].value.trim().slice(0, 800);
   if (!/^\d{4}-\d{2}$/.test(m) || !title) return toast('Вкажи місяць і тему');
   const isNew = !contest[m];
   run(F.setDoc(F.doc(db, 'contest', m), { title, desc }, { merge: true }).then(() => {
@@ -2409,6 +2471,7 @@ $('#setList').onclick = e => {
   if (a === 'tz') $('#tzBtn').click();
   if (a === 'install') $('#install').click();
   if (a === 'snow') toggleSnow();
+  if (a === 'tg') window.open(TG, '_blank', 'noopener');
   if (a === 'logout') forget();
   if (a === 'teacher') $('#login').click();
 };

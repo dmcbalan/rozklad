@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=Unbounded:wght@500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1796600000">
+<link rel="stylesheet" href="style.css?v=1796800000">
 </head>
 <body>
 
@@ -42,6 +42,7 @@
     <span class="badge">📅 Актуальний розклад</span>
     <h1>Розклад <span class="grad">занять</span></h1>
     <p class="lead">Крок за кроком до твоїх цілей. Усі зміни з'являються тут одразу, оновлювати сторінку не треба.</p>
+    <p class="tg-line">💬 Питання про заняття? <a href="https://t.me/dmcbalan" target="_blank" rel="noopener">Напишіть у Telegram <b>@dmcbalan</b></a></p>
     <div class="nums" id="stats"></div>
   </div>
 </section>
@@ -67,6 +68,7 @@
     <div id="tab-me-friends" class="tab" hidden><div id="meFriends" class="ref"></div></div>
     <div id="tab-me-tree" class="tab" hidden><div id="meTree"></div></div>
     <div id="tab-me-chat" class="tab" hidden>
+      <p class="tg-note">👨‍👩‍👧 Батькам: питання про оплату чи розклад зручно писати в <a href="https://t.me/dmcbalan" target="_blank" rel="noopener">Telegram @dmcbalan</a></p>
       <div id="meChat" class="chat-msgs"></div>
       <form id="meChatForm" class="chat-form">
         <div class="att" hidden></div>
@@ -142,6 +144,8 @@
         <button data-tab="hw">ДЗ <b id="hwCount" hidden></b></button>
         <button data-tab="chats">Чати <b id="chatCount" hidden></b></button>
         <button data-tab="requests">Заявки <b id="reqCount" hidden></b></button>
+        <button data-tab="trials">🎁 Пробні <b id="trialCount" hidden></b></button>
+        <button data-tab="contest">🏆 Челендж</button>
       </div>
       <button id="seed" class="btn" hidden>Імпортувати розклад з таблиці</button>
     </div>
@@ -202,8 +206,9 @@
 
     <div id="tab-requests" class="tab" hidden>
       <div id="requests"></div>
-      <div id="contestAdmin"></div>
     </div>
+    <div id="tab-trials" class="tab" hidden><div id="trials"></div></div>
+    <div id="tab-contest" class="tab" hidden><div id="contestAdmin"></div></div>
   </section>
   <!-- Публічне портфоліо учня (?p=код) -->
   <section id="folio" class="folio" hidden></section>
@@ -233,6 +238,7 @@
 <footer>
   <button id="install" class="btn ghost sm" hidden>Встановити як застосунок</button>
   <button id="snowBtn" class="link" hidden></button>
+  <a class="link tg-foot" href="https://t.me/dmcbalan" target="_blank" rel="noopener">✈️ Telegram викладача</a>
   <button id="login" class="link">Вхід для викладача</button>
 </footer>
 
@@ -354,7 +360,7 @@
 <div id="toast" role="status"></div>
 <canvas id="snow" aria-hidden="true" hidden></canvas>
 
-<script src="config.js?v=1796600000"></script>
-<script src="app.js?v=1796600000"></script>
+<script src="config.js?v=1796800000"></script>
+<script src="app.js?v=1796800000"></script>
 </body>
 </html>
