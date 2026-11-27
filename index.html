@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=Unbounded:wght@500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1796300000">
+<link rel="stylesheet" href="style.css?v=1796400000">
 </head>
 <body>
 
@@ -38,6 +38,7 @@
   <div class="aur" aria-hidden="true"></div>
   <div class="wrap">
     <div id="refHi" class="ref-hi" hidden><span class="ref-big">🎁</span><span><b>Тебе запросив друг!</b> Запишись на пробний урок, а якщо продовжиш — <b id="refGift"></b> 🎁</span><button class="btn sm" onclick="document.getElementById('trialBtn').click()">Записатися</button></div>
+    <a id="contestHi" class="contest-hi" href="?c=" hidden></a>
     <span class="badge">📅 Актуальний розклад</span>
     <h1>Розклад <span class="grad">занять</span></h1>
     <p class="lead">Крок за кроком до твоїх цілей. Усі зміни з'являються тут одразу, оновлювати сторінку не треба.</p>
@@ -55,14 +56,16 @@
       <button class="on" data-tab="me-home">Огляд</button>
       <button data-tab="me-chat">Чат <b id="meUnread" hidden></b></button>
       <button data-tab="me-friends">🎁 Друзі</button>
+      <button data-tab="me-tree" id="treeTabBtn" hidden>🎄 Ялинка</button>
       <button data-tab="me-lessons">Заняття</button>
       <button data-tab="me-hw">Домашні</button>
       <button data-tab="me-awards">Нагороди</button>
       <button data-tab="me-avatar">Персонаж</button>
       <button data-tab="me-photos">Мої роботи</button>
     </div>
-    <div id="tab-me-home" class="tab"><div id="rateBox" class="rate" hidden></div><button id="refTeaser" class="ref-teaser" data-gotab="me-friends"></button><div id="meMain"></div></div>
+    <div id="tab-me-home" class="tab"><div id="rateBox" class="rate" hidden></div><div id="contestMe" class="contest-me" hidden></div><button id="refTeaser" class="ref-teaser" data-gotab="me-friends"></button><div id="meMain"></div></div>
     <div id="tab-me-friends" class="tab" hidden><div id="meFriends" class="ref"></div></div>
+    <div id="tab-me-tree" class="tab" hidden><div id="meTree"></div></div>
     <div id="tab-me-chat" class="tab" hidden>
       <div id="meChat" class="chat-msgs"></div>
       <form id="meChatForm" class="chat-form">
@@ -199,6 +202,7 @@
 
     <div id="tab-requests" class="tab" hidden>
       <div id="requests"></div>
+      <div id="contestAdmin"></div>
     </div>
   </section>
   <!-- Публічне портфоліо учня (?p=код) -->
@@ -228,6 +232,7 @@
 
 <footer>
   <button id="install" class="btn ghost sm" hidden>Встановити як застосунок</button>
+  <button id="snowBtn" class="link" hidden></button>
   <button id="login" class="link">Вхід для викладача</button>
 </footer>
 
@@ -345,8 +350,9 @@
 </dialog>
 
 <div id="toast" role="status"></div>
+<canvas id="snow" aria-hidden="true" hidden></canvas>
 
-<script src="config.js?v=1796300000"></script>
-<script src="app.js?v=1796300000"></script>
+<script src="config.js?v=1796400000"></script>
+<script src="app.js?v=1796400000"></script>
 </body>
 </html>

@@ -113,6 +113,15 @@ service cloud.firestore {
           && request.resource.data.at == request.time;
         allow delete: if isTeacher();
       }
+      // Ялинка учня: до 80 прикрас; що саме намальовано, перевіряє сторінка (cleanTree)
+      match /tree/{id} {
+        allow read: if true;
+        allow write: if id == 'me' && exists(/databases/$(db)/documents/public/$(token))
+          && request.resource.data.keys().hasOnly(['items', 'lights'])
+          && request.resource.data.items is list && request.resource.data.items.size() <= 80
+          && request.resource.data.get('lights', true) is bool;
+        allow delete: if isTeacher();
+      }
       // Персонаж учня
       match /avatar/{id} {
         allow read: if true;
@@ -147,6 +156,29 @@ service cloud.firestore {
     }
     match /{path=**}/messages/{id} {
       allow read: if isTeacher();
+    }
+    // Челендж місяця: тему й роботи публікує викладач, голосувати може будь-хто — один голос з браузера за роботу, поки немає переможця
+    match /contest/{m} {
+      allow read: if true;
+      allow write: if isTeacher();
+      match /images/{id} {
+        allow read: if true;
+        allow write: if isTeacher();
+      }
+      match /entries/{id} {
+        allow read: if true;
+        allow write: if isTeacher();
+        match /votes/{voter} {
+          allow read: if true;
+          allow create: if voter.size() >= 16 && voter.size() <= 40
+            && exists(/databases/$(db)/documents/contest/$(m)/entries/$(id))
+            && get(/databases/$(db)/documents/contest/$(m)).data.get('winner', '') == ''
+            && request.resource.data.keys().hasOnly(['stars', 'created'])
+            && request.resource.data.stars is int && request.resource.data.stars >= 1 && request.resource.data.stars <= 5
+            && request.resource.data.created == request.time;
+          allow delete: if isTeacher();
+        }
+      }
     }
     // Заявки на вільні вікна: створити може будь-хто, бачить лише викладач
     match /requests/{id} {

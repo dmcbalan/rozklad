@@ -376,6 +376,8 @@ function renderMe() {
   renderAwards(g);
   renderAvatarTab(g);
   renderFriends();
+  renderContestMe();
+  renderTree(g);
   renderRate();
   renderPhotoGrid($('#photoGrid'), token, mePhotos, false);
 }
@@ -527,7 +529,7 @@ function loadImg(tok, id) {
   }).catch(() => { imgCache[id] = 'none'; });
 }
 const ms = t => t?.toMillis ? t.toMillis() : 0;
-function renderPhotoGrid(el, tok, list, canDelete, pubs) {
+function renderPhotoGrid(el, tok, list, canDelete, pubs, cont) {
   const items = Object.entries(list).sort((a, b) => ms(b[1].created) - ms(a[1].created));
   el.innerHTML = items.length ? items.map(([id, p]) => {
     loadImg(tok, id);
@@ -535,6 +537,7 @@ function renderPhotoGrid(el, tok, list, canDelete, pubs) {
     return `<figure>${src && src.startsWith('data:') ? `<a href="${src}" target="_blank"><img src="${src}" alt="${esc(p.caption || 'Фото')}" loading="lazy"></a>` : '<div class="ph-wait"></div>'}
       <figcaption>${p.caption ? esc(p.caption) + ' · ' : ''}${p.created ? new Date(ms(p.created)).toLocaleDateString('uk', { day: 'numeric', month: 'short' }) : 'щойно'}</figcaption>
       ${pubs ? `<button class="ghost link-btn pub${pubs.includes(id) ? ' has' : ''}" data-pub="${id}" data-tok="${esc(tok)}">${pubs.includes(id) ? '✓ У портфоліо' : '🌐 В портфоліо'}</button>` : ''}
+      ${cont && contest[monthKey()] ? `<button class="ghost link-btn pub${cont.includes(monthKey() + '/' + id) ? ' has' : ''}" data-contest="${id}" data-tok="${esc(tok)}">${cont.includes(monthKey() + '/' + id) ? '✓ На челенджі' : '🏆 На челендж'}</button>` : ''}
       ${canDelete ? `<button class="x" data-delphoto="${id}" data-tok="${esc(tok)}" aria-label="Видалити фото">✕</button>` : ''}</figure>`;
   }).join('') : '<p class="muted small">Ще немає фото</p>';
 }
@@ -558,7 +561,7 @@ function openPhotos(name) {
   dlg.dataset.name = name;
   $('#photoTitle').textContent = `Фото: ${name}`;
   const list = Object.fromEntries(Object.entries(photos).filter(([, p]) => p.token === st.token));
-  renderPhotoGrid($('#photoDlgGrid'), st.token, list, true, st.pubWorks || []);
+  renderPhotoGrid($('#photoDlgGrid'), st.token, list, true, st.pubWorks || [], st.contestEntries || []);
   if (!dlg.open) {
     dlg.showModal();
     run(F.setDoc(F.doc(db, 'students', name), { seenPhotos: Date.now() }, { merge: true }));
@@ -615,6 +618,7 @@ function renderNav() {
     ['notif', '🔔', 'Сповіщення на пристрої', perm],
     ['theme', '🌓', 'Тема', darkNow() ? 'Темна' : 'Світла'],
     ['tz', '🌍', 'Часовий пояс', tz === BASE_TZ ? 'Київ' : `${tzName(tz)} · ${gmt(tz)}`],
+    isWinter() && ['snow', '❄️', 'Сніг на сайті', snowOn() ? 'увімкнено' : 'вимкнено'],
     installEvt && ['install', '📲', 'Встановити як застосунок', ''],
     me && ['logout', '🚪', 'Вийти з кабінету', me.name],
     ['teacher', '🎓', $('#login').textContent, ''],
@@ -622,9 +626,13 @@ function renderNav() {
 }
 
 function render() {
+  if (contestId) return renderContest();
   if (folioId) return renderFolio();
   $('#trialBtn').hidden = !!me;
   $('#refHi').hidden = !myRef() || !!me || isTeacher;
+  const cm = contest[monthKey()];
+  $('#contestHi').hidden = !cm || !!me;
+  if (cm) $('#contestHi').innerHTML = `<span>🏆</span><span><b>Челендж місяця: «${esc(cm.title)}»</b><small>${cm.winner ? `Переможець — ${esc(cm.winnerName || '')} 👑` : 'Подивись роботи учнів і проголосуй ⭐'}</small></span><i>›</i>`;
   $('#refGift').textContent = giftText();
   const q = $('#search').value.trim().toLowerCase(), v = viewWeek(), memo = {}, on = d => memo[d] ||= slotsOn(d);
   $('#tzLabel').textContent = tz === BASE_TZ ? 'Київський час' : `${tzName(tz)} · ${gmt(tz)}`;
@@ -660,6 +668,7 @@ function renderTeacher() {
   renderStudents(recs, rem);
   renderStats();
   renderRequests();
+  renderContestAdmin();
   renderChats();
   renderSubs();
   renderNewRevs();
@@ -797,7 +806,7 @@ async function purgeStudent(n) {
   Object.entries(lessons).forEach(([k, v]) => v === n && refs.push(F.doc(db, 'lessons', k)));
   const all = async (...path) => (await F.getDocs(F.collection(db, ...path))).forEach(d => refs.push(d.ref));
   if (st.token) {
-    for (const c of ['photos', 'photoData', 'messages', 'msgData', 'notifs', 'subs', 'subData', 'spins', 'ratings', 'presence', 'avatar']) await all('public', st.token, c);
+    for (const c of ['photos', 'photoData', 'messages', 'msgData', 'notifs', 'subs', 'subData', 'spins', 'ratings', 'presence', 'avatar', 'tree']) await all('public', st.token, c);
     refs.push(F.doc(db, 'public', st.token));
   }
   if (st.pid) { await all('portfolio', st.pid, 'works'); refs.push(F.doc(db, 'portfolio', st.pid)); }
@@ -1200,6 +1209,7 @@ $('#tzList').onclick = e => {
 };
 
 let bookTrial = false; // заявку відкрито кнопкою «Пробний урок»
+if (new URLSearchParams(location.search).has('trial')) setTimeout(() => $('#trialBtn').click(), 600); // ?trial=1 — з галереї челенджу
 $('#freeBtn').onclick = () => {
   const on = document.body.classList.toggle('free');
   if (!on) bookTrial = false;
@@ -1304,6 +1314,8 @@ document.querySelectorAll('dialog [data-close]').forEach(b => b.addEventListener
 $('#photoDlg').onclick = e => {
   const pb = e.target.closest('[data-pub]');
   if (pb) return togglePub($('#photoDlg').dataset.name, pb.dataset.pub, pb.dataset.tok);
+  const cb = e.target.closest('[data-contest]');
+  if (cb) return toggleContest($('#photoDlg').dataset.name, cb.dataset.contest, cb.dataset.tok);
   const b = e.target.closest('[data-delphoto]');
   if (!b || b.dataset.sure !== '1') { if (b) { b.dataset.sure = '1'; b.textContent = 'Видалити?'; } return; }
   const bt = F.writeBatch(db), tok = b.dataset.tok, id = b.dataset.delphoto;
@@ -1768,7 +1780,7 @@ function notifyStudent(n, type, text) {
   const tok = students[n]?.token;
   if (tok) run(F.addDoc(F.collection(db, 'public', tok, 'notifs'), { type, text: text.slice(0, 300), created: F.serverTimestamp() }));
 }
-const N_ICON = { hw: '📚', badge: '🏅', review: '📝', cert: '🎓' }, N_GO = { hw: 'me-hw', badge: 'me-awards', review: 'me-hw', cert: 'me-awards' };
+const N_ICON = { hw: '📚', badge: '🏅', review: '📝', cert: '🎓', contest: '🏆' }, N_GO = { hw: 'me-hw', badge: 'me-awards', review: 'me-hw', cert: 'me-awards', contest: 'me-home' };
 function feed() {
   const out = [];
   if (me) {
@@ -2046,6 +2058,295 @@ $('#folio').onclick = e => {
   if (e.target.closest('[data-fshare]')) shareFolio(location.href, folio.name);
 };
 
+// ---------- Челендж місяця: contest/{YYYY-MM} (тема), entries/{id фото} (робота), images/{id} (фото), entries/{id}/votes/{глядач} ----------
+// Роботу на публічну сторінку додає лише викладач (фото дітей — тільки після перевірки)
+const monthKey = () => tzParts(BASE_TZ, Date.now()).date.slice(0, 7);
+const contestId = (() => { const v = new URLSearchParams(location.search).get('c'); return v === null ? null : /^\d{4}-\d{2}$/.test(v) ? v : monthKey(); })();
+let contest = {}, contestEntries = {}, contestVotes = {}, contestMonth = contestId || monthKey(), contestUnsub = [];
+// Один голос за роботу з одного браузера. shortcut: інший браузер = ще голос; для серйозних призів — вхід через Google
+const voterId = (() => {
+  let v = ''; try { v = localStorage.getItem('rozklad-voter') || ''; } catch {}
+  if (!/^[a-z0-9]{16,40}$/.test(v)) {
+    v = Array.from(crypto.getRandomValues(new Uint8Array(14)), b => (b % 36).toString(36)).join('') + Date.now().toString(36);
+    try { localStorage.setItem('rozklad-voter', v); } catch {}
+  }
+  return v;
+})();
+// Рейтинг: середня оцінка, «притягнута» до 3★ на перших голосах, — одна п'ятірка не обганяє десять четвірок
+function contestStats(id) {
+  const v = Object.values(contestVotes[id] || {}).map(x => x.stars).filter(s => s >= 1 && s <= 5), n = v.length, sum = v.reduce((a, b) => a + b, 0);
+  return { n, avg: n ? sum / n : 0, score: (sum + 9) / (n + 3) };
+}
+console.assert((() => { contestVotes = { a: { x: { stars: 5 } }, b: Object.fromEntries(Array.from({ length: 10 }, (_, i) => [i, { stars: 4 }])) };
+  const r = contestStats('b').score > contestStats('a').score && contestStats('a').avg === 5; contestVotes = {}; return r; })(), 'contestStats()');
+function watchEntries(m) {
+  contestUnsub.forEach(u => u()); contestUnsub = []; contestEntries = {}; contestVotes = {}; contestMonth = m;
+  const vs = {};
+  if (m !== monthKey()) contestUnsub.push(F.onSnapshot(F.doc(db, 'contest', m), d => { contest[m] = d.exists() ? d.data() : null; render(); }, () => { contest[m] = null; render(); }));
+  contestUnsub.push(F.onSnapshot(F.collection(db, 'contest', m, 'entries'), s => {
+    contestEntries = {}; s.forEach(d => contestEntries[d.id] = d.data());
+    for (const id of Object.keys(contestEntries)) vs[id] ||= F.onSnapshot(F.collection(db, 'contest', m, 'entries', id, 'votes'),
+      v => { contestVotes[id] = {}; v.forEach(x => contestVotes[id][x.id] = x.data()); render(); }, () => {});
+    render();
+  }, () => {}));
+  contestUnsub.push(() => Object.values(vs).forEach(u => u()));
+}
+function loadContestImg(id) {
+  const k = 'c' + id;
+  if (imgCache[k]) return;
+  imgCache[k] = 'loading';
+  F.getDoc(F.doc(db, 'contest', contestMonth, 'images', id)).then(d => {
+    const s = d.data()?.image;
+    imgCache[k] = isData(s) && s.startsWith('data:image/') ? s : 'none';
+    render();
+  }).catch(() => { imgCache[k] = 'none'; });
+}
+const contestList = () => Object.entries(contestEntries).map(([id, e]) => ({ id, ...e, ...contestStats(id) })).sort((a, b) => b.score - a.score || b.n - a.n);
+const contestUrl = m => location.origin + location.pathname + '?c=' + m;
+
+// Публічна галерея ?c=місяць
+function renderContest() {
+  document.body.classList.add('folio-mode');
+  const box = $('#folio'), m = contestId, c = contest[m];
+  box.hidden = false;
+  if (c === undefined) { box.innerHTML = '<p class="empty">Завантаження челенджу…</p>'; return; }
+  if (!c) { box.innerHTML = '<div class="folio-hero"><div><h1>Челенджу ще немає</h1><p class="lead">Зазирни трохи пізніше 🙂</p></div></div>'; return; }
+  const open = !c.winner, list = contestList();
+  const html = `<div class="contest-hero"><span class="ch-cup">🏆</span><div><small>Челендж місяця · ${monthName(m)}</small><h1>${esc(c.title)}</h1>
+      ${c.desc ? `<p class="lead">${esc(c.desc)}</p>` : ''}
+      <p>${open ? 'Оцінюй роботи зірочками ⭐ Автор найкращої отримає медаль «Учень місяця» 👑' : `👑 Учень місяця — <b>${esc(c.winnerName || '')}</b>. Дякуємо всім, хто голосував!`}</p>
+      <button class="btn sm" data-sharecontest>Поділитися</button></div></div>
+    ${list.length ? `<div class="contest-grid">${list.map(e => contestCard(e, open, c.winner)).join('')}</div>` : '<p class="empty">Роботи учнів з\'являться тут зовсім скоро 🎨</p>'}
+    <div class="folio-cta">
+      <div><h2>Хочете, щоб ваша дитина теж створювала ігри й брала участь у челенджах?</h2>
+      <p>Індивідуальні онлайн-заняття 1:1 з програмування, створення ігор, сайтів і відеомонтажу.</p></div>
+      <div class="folio-btns"><a class="btn" href="${location.pathname}${myRef() ? '?ref=' + myRef() : ''}" data-trialgo>🎁 Пробний урок</a>
+        <a class="btn ghost" href="https://balanstudy.com.ua/" target="_blank" rel="noopener">Дізнатися про заняття</a></div>
+    </div>`;
+  if (box._html !== html) box.innerHTML = box._html = html;
+}
+function contestCard(e, open, winner) {
+  loadContestImg(e.id);
+  const src = imgCache['c' + e.id], mine = contestVotes[e.id]?.[voterId]?.stars || 0;
+  return `<article class="centry${e.id === winner ? ' win' : ''}">
+    ${src?.startsWith('data:image/') ? `<a href="${src}" target="_blank"><img src="${src}" alt="${esc(e.caption || 'Робота')}" loading="lazy"></a>` : '<div class="ph-wait"></div>'}
+    <div class="ce-body"><b>${e.id === winner ? '👑 ' : ''}${esc(e.name)}</b>${e.caption ? `<small>${esc(e.caption)}</small>` : ''}
+      <div class="stars" role="group" aria-label="Оцінка роботи">${[1, 2, 3, 4, 5].map(s => `<button data-vote="${e.id}" data-s="${s}" class="${s <= mine ? 'on' : ''}"${mine || !open ? ' disabled' : ''} aria-label="${s} з 5">★</button>`).join('')}</div>
+      <small class="muted">${e.n ? `★ ${e.avg.toFixed(1)} · ${e.n} ${plural(e.n, 'голос', 'голоси', 'голосів')}` : 'Ще немає оцінок — будь першим!'}${mine ? ` · твоя оцінка ${mine}★` : ''}</small></div></article>`;
+}
+$('#folio').addEventListener('click', e => {
+  if (!contestId) return;
+  if (e.target.closest('[data-sharecontest]')) {
+    const t = `Проголосуй за роботи учнів Balan Study 🏆 «${contest[contestId]?.title || ''}»`;
+    return navigator.share ? navigator.share({ title: 'Челендж місяця', text: t, url: location.href }).catch(() => {}) : copyText(location.href, 'Посилання скопійовано');
+  }
+  if (e.target.closest('[data-trialgo]')) { e.preventDefault(); location.href = e.target.closest('a').href + (e.target.closest('a').href.includes('?') ? '&' : '?') + 'trial=1'; return; }
+  const v = e.target.closest('[data-vote]');
+  if (!v || v.disabled || !F) return;
+  const id = v.dataset.vote, stars = +v.dataset.s;
+  (contestVotes[id] ||= {})[voterId] = { stars }; // одразу показати
+  render();
+  F.setDoc(F.doc(db, 'contest', contestId, 'entries', id, 'votes', voterId), { stars, created: F.serverTimestamp() })
+    .then(() => toast('Дякуємо за голос ⭐')).catch(err => { delete contestVotes[id][voterId]; render(); toast(err?.code === 'permission-denied' ? 'Ти вже голосував(ла) за цю роботу або голосування закрито' : errText(err)); });
+});
+
+// Учень: картка челенджу на «Огляді»
+function renderContestMe() {
+  const m = monthKey(), c = contest[m], box = $('#contestMe');
+  box.hidden = !c;
+  if (!c) return;
+  const sent = Object.values(mePhotos).some(p => (p.caption || '').startsWith('🏆') && iso(new Date(ms(p.created) || Date.now())).slice(0, 7) === m);
+  const inGallery = Object.values(contestEntries).length && Object.keys(contestEntries).some(id => mePhotos[id]);
+  const html = `<span class="ch-cup">🏆</span><div><small>Челендж місяця</small><b>${esc(c.title)}</b>${c.desc ? `<p>${esc(c.desc)}</p>` : ''}
+    <p class="small">${c.winner ? `👑 Учень місяця — ${esc(c.winnerName || '')}` : inGallery ? '✅ Твоя робота в галереї! Поклич рідних і друзів проголосувати' : sent ? '⏳ Роботу надіслано — викладач додасть її в галерею' : 'Зроби роботу, сфотографуй або зроби скриншот і надішли — найкраща отримає медаль «Учень місяця» 👑'}</p>
+    <div class="ch-btns">${c.winner ? '' : `<button class="btn sm" data-contestsend>📷 ${sent ? 'Надіслати ще' : 'Надіслати роботу'}</button>`}<a class="ghost link-btn" href="?c=${m}" target="_blank" rel="noopener">Галерея й голосування ↗</a></div></div>`;
+  if (box._html !== html) box.innerHTML = box._html = html;
+}
+$('#contestMe').addEventListener('click', e => {
+  if (!e.target.closest('[data-contestsend]')) return;
+  showTab($('#me .tabs'), 'me-photos');
+  $('#photoCap').value = `🏆 ${contest[monthKey()]?.title || ''}`.slice(0, 200);
+  $('#photoFile').click();
+});
+
+// Викладач: фото учня → на челендж і назад
+async function toggleContest(n, id, tok) {
+  const m = monthKey(), key = `${m}/${id}`, st = students[n] || {}, on = (st.contestEntries || []).includes(key);
+  try {
+    const eRef = F.doc(db, 'contest', m, 'entries', id), iRef = F.doc(db, 'contest', m, 'images', id), bt = F.writeBatch(db);
+    if (on) {
+      (await F.getDocs(F.collection(db, 'contest', m, 'entries', id, 'votes'))).forEach(d => bt.delete(d.ref));
+      bt.delete(eRef); bt.delete(iRef);
+      bt.set(F.doc(db, 'students', n), { contestEntries: F.arrayRemove(key) }, { merge: true });
+      await bt.commit();
+      return toast('Роботу прибрано з челенджу');
+    }
+    let image = imgCache[id];
+    if (!isData(image)) image = (await F.getDoc(F.doc(db, 'public', tok, 'photoData', id))).data()?.image;
+    if (!isData(image) || !image.startsWith('data:image/')) return toast('Фото ще не завантажилось, спробуй за секунду');
+    let caption = (photos[id]?.caption || '').replace(/^🏆\s*/, '');
+    if (caption === contest[m]?.title) caption = '';
+    bt.set(iRef, { image });
+    bt.set(eRef, { name: n.split(' ')[0], caption: caption.slice(0, 200), created: F.serverTimestamp() });
+    bt.set(F.doc(db, 'students', n), { contestEntries: F.arrayUnion(key) }, { merge: true });
+    await bt.commit();
+    toast('Робота на челенджі 🏆');
+  } catch (e) { toast(errText(e)); }
+}
+
+// Викладач: тема місяця, роботи з оцінками, переможець
+function renderContestAdmin() {
+  const m = contestMonth, c = contest[m], el = $('#contestAdmin'), list = contestList();
+  const html = `<h4 class="sep">🏆 Челендж місяця</h4>
+    <form class="contest-form"><label class="fl">Місяць<input type="month" name="m" value="${m}"></label>
+      <label class="fl">Тема<input name="title" maxlength="80" value="${esc(c?.title || '')}" placeholder="Напр.: Зроби гру про зиму" required></label>
+      <label class="fl">Опис (необов'язково)<textarea name="desc" maxlength="300" rows="2" placeholder="Що зробити, до якого числа">${esc(c?.desc || '')}</textarea></label>
+      <div class="actions"><button class="btn sm">${c ? 'Зберегти' : 'Оголосити челендж'}</button>
+        ${c ? `<a class="ghost link-btn" href="?c=${m}" target="_blank" rel="noopener">Галерея ↗</a><button type="button" class="ghost link-btn" data-copycontest>🔗 Посилання для батьків</button>` : ''}</div></form>
+    ${!c ? '<p class="muted small">Після оголошення всі учні отримають сповіщення, а на головній з\'явиться банер «Голосуй».</p>'
+      : list.length ? `<ul class="contest-admin">${list.map(e => `<li><b>${e.id === c.winner ? '👑 ' : ''}${esc(e.name)}</b><small>${esc(e.caption || '')}</small>
+          <span>★ ${e.n ? e.avg.toFixed(1) : '—'} · ${e.n} ${plural(e.n, 'голос', 'голоси', 'голосів')}</span>${c.winner ? '' : `<button class="ghost link-btn" data-winner="${e.id}">👑 Переможець</button>`}</li>`).join('')}</ul>`
+      : '<p class="muted small">Робіт ще немає. Учні надсилають їх з кабінету («🏆 Надіслати роботу»), а ти додаєш кнопкою «🏆 На челендж» у фото учня («Учні» → 📷).</p>'}`;
+  if (el._html !== html) el.innerHTML = el._html = html;
+}
+$('#contestAdmin').addEventListener('change', e => { if (e.target.name === 'm' && /^\d{4}-\d{2}$/.test(e.target.value)) watchEntries(e.target.value); });
+$('#contestAdmin').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target, m = f.elements['m'].value, title = f.elements['title'].value.trim().slice(0, 80), desc = f.elements['desc'].value.trim().slice(0, 300);
+  if (!/^\d{4}-\d{2}$/.test(m) || !title) return toast('Вкажи місяць і тему');
+  const isNew = !contest[m];
+  run(F.setDoc(F.doc(db, 'contest', m), { title, desc }, { merge: true }).then(() => {
+    toast(isNew ? 'Челендж оголошено 🏆' : 'Збережено');
+    if (isNew && m === monthKey()) for (const [n, st] of Object.entries(students))
+      if (st.token && !isArchived(n)) notifyStudent(n, 'contest', `Новий челендж місяця: «${title}» 🏆 Надішли свою роботу!`);
+  }));
+});
+$('#contestAdmin').addEventListener('click', e => {
+  if (e.target.closest('[data-copycontest]')) return copyText(`Голосуйте за роботи учнів Balan Study 🏆 «${contest[contestMonth]?.title || ''}»\n${contestUrl(contestMonth)}`, 'Посилання скопійовано — надішли в чат батькам');
+  const w = e.target.closest('[data-winner]');
+  if (!w) return;
+  if (w.dataset.sure !== '1') { w.dataset.sure = '1'; w.textContent = 'Точно? Голосування закриється'; return; }
+  const m = contestMonth, id = w.dataset.winner, key = `${m}/${id}`, ent = contestEntries[id];
+  const n = Object.keys(students).find(k => (students[k].contestEntries || []).includes(key)), medal = 'Учень місяця 👑';
+  const bt = F.writeBatch(db);
+  bt.set(F.doc(db, 'contest', m), { winner: id, winnerName: ent?.name || '' }, { merge: true });
+  if (n) bt.set(F.doc(db, 'students', n), { badges: F.arrayUnion(medal) }, { merge: true });
+  run(bt.commit().then(() => {
+    if (n) notifyStudent(n, 'badge', `Ти — Учень місяця 👑 Твоя робота перемогла в челенджі «${contest[m]?.title || ''}» (+${XP.medal} XP)`);
+    toast('Переможця оголошено 👑');
+  }));
+});
+
+// ---------- Ялинка в кабінеті (листопад–січень): прикраси відкриваються з рівнями ----------
+const isWinter = () => [11, 12, 1].includes(+tzParts(BASE_TZ, Date.now()).date.slice(5, 7));
+const ORN = [['ball', 'Кулька', 1], ['bell', 'Дзвіночок', 2], ['candy', 'Льодяник', 3], ['flake', 'Сніжинка', 4], ['gift', 'Подарунок', 5], ['heart', 'Сердечко', 6]];
+const ORN_C = ['#E5364F', '#FFD23F', '#3D8BFF', '#9B5CFF', '#12C2A0', '#FF8A3D'];
+const TREE_TIERS = [[150, 30, 95, 110, 205, 110], [150, 70, 75, 170, 225, 170], [150, 120, 55, 240, 245, 240], [150, 170, 35, 300, 265, 300]];
+let meTree = { items: [], lights: true }, treeTool = 'ball', treeColor = 0;
+const inTri = (x, y, [ax, ay, bx, by, cx, cy]) => { const s = (px, py, qx, qy, rx, ry) => (px - rx) * (qy - ry) - (qx - rx) * (py - ry), d1 = s(x, y, ax, ay, bx, by), d2 = s(x, y, bx, by, cx, cy), d3 = s(x, y, cx, cy, ax, ay); return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0)); };
+const onTree = (x, y) => TREE_TIERS.some(t => inTri(x, y, t));
+console.assert(onTree(150, 200) && !onTree(20, 50) && !onTree(150, 345), 'onTree()');
+function ornSvg(o, i) {
+  const { x, y } = o, c = ORN_C[o.c] || ORN_C[0], k = `data-orn="${i}"`;
+  switch (o.t) {
+    case 'top': return `<path ${k} class="top" d="M150 6l6.5 13.5 15 2-11 10.4 2.7 14.7L150 39.6l-13.2 7 2.7-14.7-11-10.4 15-2Z" fill="#FFD23F" stroke="#C98B00" stroke-width="2"/>`;
+    case 'ball': return `<g ${k}><rect x="${x - 2.5}" y="${y - 13}" width="5" height="4" fill="#C9A227"/><circle cx="${x}" cy="${y}" r="9" fill="${c}"/><circle cx="${x - 3}" cy="${y - 3}" r="2.5" fill="#fff" opacity=".6"/></g>`;
+    case 'bell': return `<g ${k}><path d="M${x - 8} ${y + 6}Q${x - 8} ${y - 9} ${x} ${y - 9}Q${x + 8} ${y - 9} ${x + 8} ${y + 6}Z" fill="${c}"/><circle cx="${x}" cy="${y + 8}" r="2.5" fill="#C9A227"/></g>`;
+    case 'candy': return `<g ${k} fill="none" stroke-width="4" stroke-linecap="round"><path d="M${x + 3} ${y + 11}V${y - 3}a5 5 0 0 0-10 0" stroke="#fff"/><path d="M${x + 3} ${y + 11}V${y - 3}a5 5 0 0 0-10 0" stroke="${c}" stroke-dasharray="3 3"/></g>`;
+    case 'flake': return `<g ${k} stroke="#fff" stroke-width="2.2" stroke-linecap="round"><circle cx="${x}" cy="${y}" r="10" fill="transparent" stroke="none"/><path d="M${x} ${y - 9}V${y + 9}M${x - 8} ${y - 4.5}L${x + 8} ${y + 4.5}M${x - 8} ${y + 4.5}L${x + 8} ${y - 4.5}"/></g>`;
+    case 'gift': return `<g ${k}><rect x="${x - 10}" y="${y - 8}" width="20" height="16" rx="2" fill="${c}"/><rect x="${x - 2}" y="${y - 8}" width="4" height="16" fill="#FFD23F"/><rect x="${x - 10}" y="${y - 2}" width="20" height="4" fill="#FFD23F"/></g>`;
+    case 'heart': return `<path ${k} d="M${x} ${y + 8}L${x - 8} ${y - 1}A4.5 4.5 0 0 1 ${x} ${y - 5}A4.5 4.5 0 0 1 ${x + 8} ${y - 1}Z" fill="${c}"/>`;
+  }
+  return '';
+}
+// Дані з бази пише учень — перед показом лишаємо лише відомі прикраси з числами в межах ялинки
+const cleanTree = items => (Array.isArray(items) ? items : []).filter(o => o && (o.t === 'top' || ORN.some(r => r[0] === o.t))).slice(0, 80)
+  .map(o => ({ t: o.t, x: Math.max(0, Math.min(300, Math.round(+o.x) || 0)), y: Math.max(0, Math.min(360, Math.round(+o.y) || 0)), c: Math.max(0, Math.min(ORN_C.length - 1, Math.round(+o.c) || 0)) }));
+function treeSvg(items, lights) {
+  const garland = [[105, 100, 195, 100], [88, 160, 212, 160], [70, 228, 230, 228], [52, 288, 248, 288]].map(([x1, y1, x2, y2], r) =>
+    `<path d="M${x1} ${y1 - 8}Q150 ${y1 + 10} ${x2} ${y2 - 8}" fill="none" stroke="#C9A227" stroke-width="1.2" opacity=".7"/>` +
+    Array.from({ length: 7 }, (_, i) => { const t = (i + .5) / 7, x = x1 + (x2 - x1) * t, y = y1 - 8 + 18 * 2 * t * (1 - t) * 1.1; return `<circle class="lt${lights ? ' on' : ''}" style="--d:${((i + r) % 3) * .4}s" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.2" fill="${ORN_C[(i + r) % ORN_C.length]}"/>`; }).join('')).join('');
+  return `<svg class="tree" viewBox="0 0 300 360" role="img" aria-label="Ялинка">
+    <ellipse cx="150" cy="335" rx="135" ry="18" fill="#fff" opacity=".85"/>
+    <rect x="135" y="296" width="30" height="38" rx="4" fill="#8B5A2B"/>
+    ${TREE_TIERS.slice().reverse().map(([ax, ay, bx, by, cx, cy], i) => `<path d="M${ax} ${ay}L${bx} ${by}Q150 ${by + 14} ${cx} ${cy}Z" fill="${['#0E7A4F', '#12935F', '#17A86C', '#1FBF7A'][i]}"/>`).join('')}
+    ${garland}${items.map(ornSvg).join('')}</svg>`;
+}
+function renderTree(g) {
+  $('#treeTabBtn').hidden = !isWinter();
+  if (!isWinter()) return;
+  const items = cleanTree(meTree.items), lights = meTree.lights !== false;
+  const html = `<div class="tree-wrap"><div class="tree-stage">${treeSvg(items, lights)}</div>
+    <div class="tree-side"><h3>Моя ялинка 🎄</h3><p class="muted small">Обери прикрасу й торкнись ялинки, щоб повісити. Торкнись прикраси — і вона зникне. Нові прикраси відкриваються з рівнями!</p>
+      <div class="tree-tools">${ORN.map(([t, name, need]) => `<button class="av-opt${treeTool === t ? ' on' : ''}" data-tool="${t}"${g.lvl < need ? ` disabled title="Відкриється на рівні ${need}"` : ''}>
+        <svg viewBox="-14 -14 28 28" width="26" height="26">${ornSvg({ t, x: 0, y: 0, c: treeColor }, -1)}</svg>${esc(name)}${g.lvl < need ? ` <small>🔒 ${need}</small>` : ''}</button>`).join('')}</div>
+      <div class="tree-colors">${ORN_C.map((c, i) => `<button class="${i === treeColor ? 'on' : ''}" data-color="${i}" style="background:${c}" aria-label="Колір ${i + 1}"></button>`).join('')}</div>
+      <div class="tree-acts"><button class="ghost link-btn" data-top>${items.some(o => o.t === 'top') ? '⭐ Зняти зірку' : '⭐ Зірка на верхівку'}</button>
+        <button class="ghost link-btn" data-lights>${lights ? '💡 Вимкнути гірлянду' : '💡 Увімкнути гірлянду'}</button>
+        <button class="ghost link-btn danger" data-clear>Зняти все</button></div>
+      <p class="muted small">Прикрас: ${items.length} з 60</p></div></div>`;
+  const box = $('#meTree');
+  if (box._html !== html) box.innerHTML = box._html = html;
+}
+let treeSave;
+function saveTree() {
+  meTree = { items: cleanTree(meTree.items), lights: meTree.lights !== false };
+  render();
+  clearTimeout(treeSave);
+  treeSave = setTimeout(() => token && F && run(F.setDoc(F.doc(db, 'public', token, 'tree', 'me'), meTree)), 600);
+}
+$('#meTree').addEventListener('click', e => {
+  const items = meTree.items = cleanTree(meTree.items);
+  const tool = e.target.closest('[data-tool]'), col = e.target.closest('[data-color]');
+  if (tool) { if (!tool.disabled) treeTool = tool.dataset.tool; return render(); }
+  if (col) { treeColor = +col.dataset.color; return render(); }
+  if (e.target.closest('[data-lights]')) { meTree.lights = meTree.lights === false; return saveTree(); }
+  if (e.target.closest('[data-clear]')) { meTree.items = []; return saveTree(); }
+  if (e.target.closest('[data-top]')) { meTree.items = items.some(o => o.t === 'top') ? items.filter(o => o.t !== 'top') : [...items, { t: 'top', x: 150, y: 26, c: 1 }]; return saveTree(); }
+  const orn = e.target.closest('[data-orn]');
+  if (orn && +orn.dataset.orn >= 0) { items.splice(+orn.dataset.orn, 1); return saveTree(); }
+  const svg = e.target.closest('svg.tree');
+  if (!svg) return;
+  const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+  const p = pt.matrixTransform(svg.getScreenCTM().inverse()), x = Math.round(p.x), y = Math.round(p.y);
+  const ground = treeTool === 'gift' && y > 300 && y < 352 && x > 20 && x < 280;
+  if (!onTree(x, y) && !ground) return toast(treeTool === 'gift' ? 'Подарунки — на ялинку або під неї 🎁' : 'Вішай прикраси на ялинку 🎄');
+  if (items.length >= 60) return toast('Ялинка вже повна! Зніми щось, щоб повісити нове');
+  items.push({ t: treeTool, x, y, c: treeColor });
+  saveTree();
+});
+
+// ---------- Сніг (листопад–січень); вимикається в налаштуваннях і внизу сторінки ----------
+const snowOn = () => { try { return localStorage.getItem('rozklad-snow') !== '0'; } catch { return true; } };
+function snow() {
+  const cv = $('#snow'), on = isWinter() && snowOn() && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  $('#snowBtn').hidden = !isWinter();
+  $('#snowBtn').textContent = snowOn() ? '❄️ Вимкнути сніг' : '❄️ Увімкнути сніг';
+  cv.hidden = !on;
+  if (!on) { cancelAnimationFrame(snow.raf); snow.raf = 0; return; }
+  if (snow.raf) return;
+  const g = cv.getContext('2d');
+  let w, h;
+  const size = () => { w = cv.width = innerWidth; h = cv.height = innerHeight; };
+  size();
+  if (!snow.resize) addEventListener('resize', snow.resize = () => size());
+  const flakes = Array.from({ length: innerWidth < 760 ? 45 : 90 }, () => ({ x: Math.random() * w, y: Math.random() * h, r: Math.random() * 2.2 + .8, s: Math.random() * .6 + .35, d: Math.random() * 6.3 }));
+  const tick = () => {
+    g.clearRect(0, 0, w, h);
+    g.fillStyle = darkNow() ? 'rgba(255,255,255,.8)' : 'rgba(120,150,220,.55)';
+    for (const f of flakes) {
+      f.y += f.s; f.d += .012; f.x += Math.sin(f.d) * .4;
+      if (f.y > h + 5) { f.y = -5; f.x = Math.random() * w; }
+      g.beginPath(); g.arc(f.x, f.y, f.r, 0, 6.3); g.fill();
+    }
+    snow.raf = requestAnimationFrame(tick);
+  };
+  tick();
+}
+const toggleSnow = () => { try { localStorage.setItem('rozklad-snow', snowOn() ? '0' : '1'); } catch {} snow(); render(); };
+$('#snowBtn').onclick = toggleSnow;
+snow();
+
 // ---------- PWA ----------
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js');
 let installEvt;
@@ -2062,6 +2363,7 @@ $('#setList').onclick = e => {
   if (a === 'theme') { $('#theme').click(); render(); }
   if (a === 'tz') $('#tzBtn').click();
   if (a === 'install') $('#install').click();
+  if (a === 'snow') toggleSnow();
   if (a === 'logout') forget();
   if (a === 'teacher') $('#login').click();
 };
@@ -2132,6 +2434,7 @@ if (!configured) {
       mine('spins', m => meSpins = m);
       mine('notifs', m => meNotifs = m);
       mine('avatar', m => meAvatar = m.me || {});
+      mine('tree', m => { if (m.me) meTree = m.me; });
       mine('ratings', m => { meRatings = m; meRatingsReady = true; });
       // «я в мережі»: раз на хвилину, поки кабінет відкритий на екрані
       const beat = () => token && me && document.visibilityState === 'visible'
@@ -2139,6 +2442,8 @@ if (!configured) {
       setInterval(beat, 60_000);
       document.addEventListener('visibilitychange', beat);
       beat.first = setInterval(() => { if (me) { beat(); clearInterval(beat.first); } }, 1000);
+      F.onSnapshot(F.doc(db, 'contest', monthKey()), d => { contest[monthKey()] = d.exists() ? d.data() : null; render(); }, () => { contest[monthKey()] = null; render(); });
+      if (contestId) watchEntries(contestId);
       if (folioId) {
         F.onSnapshot(F.doc(db, 'portfolio', folioId), d => { folio = d.exists() ? d.data() : false; render(); }, () => { folio = false; render(); });
         F.onSnapshot(F.collection(db, 'portfolio', folioId, 'works'), s => { folioWorks = {}; s.forEach(d => folioWorks[d.id] = d.data()); render(); }, () => {});
@@ -2153,6 +2458,7 @@ if (!configured) {
         $('#login').textContent = user ? 'Вийти' : 'Вхід для викладача';
         if (user && !isTeacher) toast('Цей акаунт не має доступу до редагування');
         if (!isTeacher && curView.startsWith('tab:')) setView('schedule');
+        if (isTeacher && !contestId) watchEntries(contestMonth);
         if (isTeacher) {
           // public/ оновлюємо лише після того, як завантажились і учні, і відмітки
           const loaded = new Set();
