@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=Unbounded:wght@500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1797000000">
+<link rel="stylesheet" href="style.css?v=1797100000">
 </head>
 <body>
 
@@ -185,9 +185,18 @@
 
     <div id="tab-chats" class="tab" hidden>
       <div class="chats">
-        <div id="chatList" class="chat-list"></div>
+        <div class="chat-side">
+          <label class="search chat-search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input id="chatSearch" type="search" placeholder="Пошук учня" autocomplete="off" aria-label="Пошук учня">
+          </label>
+          <div id="chatList" class="chat-list"></div>
+        </div>
         <div class="chat-box">
-          <p id="chatWith" class="label"></p>
+          <div class="chat-head">
+            <button type="button" class="chat-back" data-chatback aria-label="Назад до чатів"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+            <div id="chatWith"></div>
+          </div>
           <div id="tChat" class="chat-msgs"></div>
           <form id="tChatForm" class="chat-form">
             <div class="att" hidden></div>
@@ -360,7 +369,7 @@
 <div id="toast" role="status"></div>
 <canvas id="snow" aria-hidden="true" hidden></canvas>
 
-<script src="config.js?v=1797000000"></script>
-<script src="app.js?v=1797000000"></script>
+<script src="config.js?v=1797100000"></script>
+<script src="app.js?v=1797100000"></script>
 </body>
 </html>

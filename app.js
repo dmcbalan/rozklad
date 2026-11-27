@@ -165,9 +165,12 @@ const ONLINE_MS = 150000;
 function onlineDot(n) {
   const tok = students[n]?.token;
   if (!tok) return '';
-  const at = presence[tok] || 0, on = Date.now() - at < ONLINE_MS;
-  const t = on ? 'У мережі' : at ? `Не в мережі · був(ла) ${new Date(at).toLocaleString('uk', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : 'Не в мережі';
+  const { on, t } = onlineState(tok);
   return ` <i class="online${on ? ' on' : ''}" title="${t}" aria-label="${t}"></i>`;
+}
+function onlineState(tok) {
+  const at = presence[tok] || 0, on = Date.now() - at < ONLINE_MS;
+  return { on, t: on ? 'У мережі' : at ? `Не в мережі · був(ла) ${new Date(at).toLocaleString('uk', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : 'Не в мережі' };
 }
 const folioId = new URLSearchParams(location.search).get('p');
 const imgCache = {}; // id фото → data URL
@@ -435,7 +438,8 @@ function renderMeChat() {
   renderMsgs($('#meChat'), list, 'student', '', token);
 }
 
-let chatName = null;
+let chatName = null, chatOpen = false; // chatOpen: на телефоні розмова відкрита поверх списку
+const phoneChats = () => matchMedia('(max-width: 760px)').matches;
 function renderChats() {
   const byTok = {};
   for (const [id, m] of Object.entries(msgs)) (byTok[m.token] ||= []).push({ ...m, id });
@@ -447,17 +451,20 @@ function renderChats() {
   $('#chatCount').hidden = !total;
   $('#chatCount').textContent = total;
   if (!people.some(p => p.n === chatName)) chatName = people[0]?.n || null;
-  $('#chatList').innerHTML = people.length ? people.map(p => `<button class="chat-item${p.n === chatName ? ' on' : ''}" data-chat="${esc(p.n)}">
+  const q = $('#chatSearch').value.trim().toLowerCase(), shown = q ? people.filter(p => p.n.toLowerCase().includes(q)) : people;
+  const when = m => { if (!m) return ''; const d = new Date(ms(m.created)); return iso(d) === iso(new Date()) ? d.toLocaleTimeString('uk', { hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString('uk', { day: 'numeric', month: 'short' }); };
+  $('#chatList').innerHTML = !people.length ? '<p class="empty">Чат з\'являється, коли в учня є кабінет: «Учні» → «+ Кабінет учня».</p>'
+    : !shown.length ? '<p class="empty">Нікого не знайдено</p>' : shown.map(p => `<button class="chat-item${p.n === chatName ? ' on' : ''}" data-chat="${esc(p.n)}">
       ${faceOf(p.n)}
       <span><b>${esc(p.n)}</b>${onlineDot(p.n)}<small>${p.last ? (p.last.by === 'teacher' ? 'Ви: ' : '') + esc(msgText(p.last)) : 'Ще немає повідомлень'}</small></span>
-      ${p.unread ? `<b class="n">${p.unread}</b>` : ''}</button>`).join('')
-    : '<p class="empty">Чат з\'являється, коли в учня є кабінет: «Учні» → «+ Кабінет учня».</p>';
-  const cur = people.find(p => p.n === chatName);
-  $('#chatWith').textContent = cur ? `Чат: ${cur.n}` : '';
+      <span class="meta"><small>${when(p.last)}</small>${p.unread ? `<b class="n">${p.unread}</b>` : ''}</span></button>`).join('');
+  const cur = people.find(p => p.n === chatName), st = cur && onlineState(students[cur.n].token);
+  $('#chatWith').innerHTML = cur ? `${faceOf(cur.n)}<span><b>${esc(cur.n)}</b><small class="${st.on ? 'on' : ''}">${st.t}</small></span>` : '';
+  $('.chats').classList.toggle('open', chatOpen && !!cur);
   $('#tChatForm').hidden = !cur;
   renderMsgs($('#tChat'), cur?.list || [], 'teacher', chatName, students[chatName]?.token);
   // прочитано, коли розмова відкрита; max — щоб розбіжність годинників не зациклила запис
-  if (cur?.unread && !$('#tab-chats').hidden && document.visibilityState === 'visible')
+  if (cur?.unread && !$('#tab-chats').hidden && document.visibilityState === 'visible' && (chatOpen || !phoneChats()))
     run(F.setDoc(F.doc(db, 'students', cur.n), { seenChat: Math.max(Date.now(), ms(cur.last.created) + 1) }, { merge: true }));
 }
 
@@ -1183,10 +1190,17 @@ $('#chatList').onclick = e => {
   const b = e.target.closest('[data-chat]');
   if (!b) return;
   chatName = b.dataset.chat;
+  openChat();
   render();
   $('#tChat').scrollTop = $('#tChat').scrollHeight;
-  $('#tChatForm').elements['text'].focus();
+  if (!phoneChats()) $('#tChatForm').elements['text'].focus();
 };
+$('#chatSearch').oninput = () => renderChats();
+// «Назад» у шапці й системна кнопка «назад» на телефоні закривають розмову, як у Telegram
+function openChat() { if (phoneChats() && !chatOpen) { chatOpen = true; history.pushState({ chat: 1 }, ''); } }
+const closeChat = () => { chatOpen = false; render(); };
+$('[data-chatback]').onclick = () => history.state?.chat ? history.back() : closeChat();
+addEventListener('popstate', () => chatOpen && closeChat());
 document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && render());
 
 // Часовий пояс: пошук по назві міста (укр/англ), країні чи GMT+N
@@ -1405,7 +1419,7 @@ $('#students').onclick = async e => {
   const ce = e.target.closest('[data-cert]');
   if (ce) return openCertIssue(ce.dataset.cert);
   const cw = e.target.closest('[data-chatwith]');
-  if (cw) { chatName = cw.dataset.chatwith; return showTab($('#panel .tabs'), 'chats'); }
+  if (cw) { chatName = cw.dataset.chatwith; openChat(); return showTab($('#panel .tabs'), 'chats'); }
   const ph = e.target.closest('[data-photos]');
   if (ph) return openPhotos(ph.dataset.photos);
   const fo = e.target.closest('[data-folio]');
@@ -1875,7 +1889,7 @@ $('#notifList').onclick = e => {
   const x = feed()[+b.dataset.i];
   $('#notifDlg').close();
   if (!x) return;
-  if (x.chat) chatName = x.chat;
+  if (x.chat) { chatName = x.chat; openChat(); }
   if (x.go.startsWith('tab:')) { setView(x.go); if (matchMedia('(min-width: 761px)').matches) $('#panel').scrollIntoView(); return; }
   setView(x.go === 'me-chat' ? 'chat' : 'profile');
   if (x.go !== 'me-chat') showTab($('#me .tabs'), x.go);
