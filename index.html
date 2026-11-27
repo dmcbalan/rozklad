@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=Unbounded:wght@500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1795700000">
+<link rel="stylesheet" href="style.css?v=1795800000">
 </head>
 <body>
 
@@ -28,6 +28,7 @@
   <div class="wrap hdr-in">
     <a class="logo" href="https://balanstudy.com.ua/"><svg class="lm" width="40" height="40" viewBox="0 0 40 40" aria-hidden="true"><use href="#lg"/></svg><span class="lw"><b>Balan</b><span>Study</span></span></a>
     <button id="bell" class="round bell" aria-label="Сповіщення" hidden><svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15ZM10 20.5a2 2 0 0 0 4 0"/></svg><b id="bellCount" hidden></b></button>
+    <label class="lang notranslate"><span id="langCode">UK</span><select id="lang" aria-label="Мова / Language"></select></label>
     <button id="theme" class="round theme" aria-label="Тема"></button>
     <a class="btn ghost sm" href="https://balanstudy.com.ua/">На сайт</a>
   </div>
@@ -62,7 +63,11 @@
     <div id="tab-me-chat" class="tab" hidden>
       <div id="meChat" class="chat-msgs"></div>
       <form id="meChatForm" class="chat-form">
+        <div class="att" hidden></div>
+        <label class="ic" title="Фото з галереї"><input type="file" accept="image/*" data-att hidden>📷</label>
+        <label class="ic" title="Файл"><input type="file" data-att hidden>📎</label>
         <textarea name="text" rows="1" maxlength="1000" placeholder="Напиши викладачу…" aria-label="Повідомлення"></textarea>
+        <button type="button" class="ic" data-voice title="Голосове: натисни, щоб почати, ще раз — надіслати">🎤</button>
         <button class="btn sm">Надіслати</button>
       </form>
     </div>
@@ -169,7 +174,11 @@
           <p id="chatWith" class="label"></p>
           <div id="tChat" class="chat-msgs"></div>
           <form id="tChatForm" class="chat-form">
+            <div class="att" hidden></div>
+            <label class="ic" title="Фото з галереї"><input type="file" accept="image/*" data-att hidden>📷</label>
+            <label class="ic" title="Файл"><input type="file" data-att hidden>📎</label>
             <textarea name="text" rows="1" maxlength="1000" placeholder="Відповісти учню…" aria-label="Повідомлення"></textarea>
+            <button type="button" class="ic" data-voice title="Голосове: натисни, щоб почати, ще раз — надіслати">🎤</button>
             <button class="btn sm">Надіслати</button>
           </form>
         </div>
@@ -201,6 +210,7 @@
     <div id="setList" class="set-list"></div>
   </section>
 </main>
+<div id="gt" hidden></div>
 
 <nav class="bnav" aria-label="Меню"></nav>
 
@@ -322,7 +332,7 @@
 
 <div id="toast" role="status"></div>
 
-<script src="config.js?v=1795700000"></script>
-<script src="app.js?v=1795700000"></script>
+<script src="config.js?v=1795800000"></script>
+<script src="app.js?v=1795800000"></script>
 </body>
 </html>

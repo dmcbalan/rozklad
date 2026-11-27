@@ -37,10 +37,23 @@ service cloud.firestore {
       match /messages/{id} {
         allow read: if true;
         allow create: if exists(/databases/$(db)/documents/public/$(token))
-          && request.resource.data.keys().hasOnly(['by', 'text', 'created'])
-          && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 1000
+          && request.resource.data.keys().hasOnly(['by', 'text', 'created', 'kind', 'name', 'file'])
+          && request.resource.data.text is string && request.resource.data.text.size() <= 1000
+          // вкладення: kind + name + file (id документа в msgData); без вкладення текст обов'язковий
+          && request.resource.data.get('kind', '') in ['', 'image', 'file', 'voice']
+          && request.resource.data.get('name', '') is string && request.resource.data.get('name', '').size() <= 200
+          && request.resource.data.get('file', '') is string && request.resource.data.get('file', '').size() <= 40
+          && (request.resource.data.get('kind', '') == '' ? request.resource.data.text.size() > 0 : request.resource.data.get('file', '').size() > 0)
           && request.resource.data.created == request.time
           && (request.resource.data.by == 'student' || (request.resource.data.by == 'teacher' && isTeacher()));
+        allow delete: if isTeacher();
+      }
+      // Дані вкладень чату (фото, файли, голосові) — окремо, щоб список повідомлень був легким
+      match /msgData/{id} {
+        allow read: if true;
+        allow create: if exists(/databases/$(db)/documents/public/$(token))
+          && request.resource.data.keys().hasOnly(['data'])
+          && request.resource.data.data is string && request.resource.data.data.size() < 900000;
         allow delete: if isTeacher();
       }
       // Сповіщення учню пише лише викладач

@@ -362,15 +362,37 @@ function renderMe() {
 
 // ---------- Чат учень ↔ викладач: public/{код}/messages ----------
 const byTime = list => list.sort((a, b) => ms(a.created) - ms(b.created));
-function renderMsgs(el, list, mine, key) {
+const msgText = m => m.text || { image: '📷 Фото', file: '📎 ' + (m.name || 'Файл'), voice: '🎤 Голосове' }[m.kind] || '';
+function loadMsgData(tok, id) {
+  if (imgCache[id]) return;
+  imgCache[id] = 'loading';
+  F.getDoc(F.doc(db, 'public', tok, 'msgData', id)).then(d => {
+    const src = d.data()?.data;
+    imgCache[id] = isData(src) ? src : 'none';
+    render();
+  }).catch(() => { imgCache[id] = 'none'; });
+}
+function msgAtt(m, tok) {
+  if (!m.file || !tok) return '';
+  loadMsgData(tok, m.file);
+  const src = imgCache[m.file];
+  if (src === 'none') return '<i>Файл недоступний</i>';
+  if (!src || src === 'loading') return '<div class="ph-wait msg-wait"></div>';
+  if (m.kind === 'image' && src.startsWith('data:image/')) return `<a href="${src}" target="_blank"><img class="msg-img" src="${src}" alt="${esc(m.name || 'Фото')}"></a>`;
+  if (m.kind === 'voice') return `<audio controls preload="metadata" src="${src}"></audio>`;
+  return `<a class="msg-file" href="${src}" download="${esc(m.name || 'file')}">📎 ${esc(m.name || 'Файл')}</a>`;
+}
+function renderMsgs(el, list, mine, key, tok) {
   const stick = el.scrollHeight - el.scrollTop - el.clientHeight < 60 || el.dataset.k !== key + list.length;
   let day = '';
-  el.innerHTML = list.length ? list.map(m => {
+  const html = list.length ? list.map(m => {
     const t = new Date(ms(m.created) || Date.now()), d = iso(t);
     const sep = d !== day ? `<p class="chat-day">${longDate(d)}</p>` : '';
     day = d;
-    return `${sep}<div class="msg${m.by === mine ? ' mine' : ''}">${esc(m.text)}<small>${t.toLocaleTimeString('uk', { hour: '2-digit', minute: '2-digit' })}</small></div>`;
+    return `${sep}<div class="msg${m.by === mine ? ' mine' : ''}">${msgAtt(m, tok)}${esc(m.text || '')}<small>${t.toLocaleTimeString('uk', { hour: '2-digit', minute: '2-digit' })}</small></div>`;
   }).join('') : `<p class="empty">${mine === 'student' ? 'Напиши викладачу: питання про урок, ДЗ чи перенос заняття.' : 'Ще немає повідомлень'}</p>`;
+  // перемальовуємо лише при змінах — інакше голосове обривається на кожному оновленні
+  if (el._html !== html) el.innerHTML = el._html = html;
   if (stick) el.scrollTop = el.scrollHeight;
   el.dataset.k = key + list.length;
 }
@@ -385,7 +407,7 @@ function renderMeChat() {
   const unread = list.filter(m => m.by === 'teacher' && ms(m.created) > meSeen).length;
   $('#meUnread').hidden = !unread;
   $('#meUnread').textContent = unread;
-  renderMsgs($('#meChat'), list, 'student', '');
+  renderMsgs($('#meChat'), list, 'student', '', token);
 }
 
 let chatName = null;
@@ -402,34 +424,82 @@ function renderChats() {
   if (!people.some(p => p.n === chatName)) chatName = people[0]?.n || null;
   $('#chatList').innerHTML = people.length ? people.map(p => `<button class="chat-item${p.n === chatName ? ' on' : ''}" data-chat="${esc(p.n)}">
       ${faceOf(p.n)}
-      <span><b>${esc(p.n)}</b>${onlineDot(p.n)}<small>${p.last ? (p.last.by === 'teacher' ? 'Ви: ' : '') + esc(p.last.text) : 'Ще немає повідомлень'}</small></span>
+      <span><b>${esc(p.n)}</b>${onlineDot(p.n)}<small>${p.last ? (p.last.by === 'teacher' ? 'Ви: ' : '') + esc(msgText(p.last)) : 'Ще немає повідомлень'}</small></span>
       ${p.unread ? `<b class="n">${p.unread}</b>` : ''}</button>`).join('')
     : '<p class="empty">Чат з\'являється, коли в учня є кабінет: «Учні» → «+ Кабінет учня».</p>';
   const cur = people.find(p => p.n === chatName);
   $('#chatWith').textContent = cur ? `Чат: ${cur.n}` : '';
   $('#tChatForm').hidden = !cur;
-  renderMsgs($('#tChat'), cur?.list || [], 'teacher', chatName);
+  renderMsgs($('#tChat'), cur?.list || [], 'teacher', chatName, students[chatName]?.token);
   // прочитано, коли розмова відкрита; max — щоб розбіжність годинників не зациклила запис
   if (cur?.unread && !$('#tab-chats').hidden && document.visibilityState === 'visible')
     run(F.setDoc(F.doc(db, 'students', cur.n), { seenChat: Math.max(Date.now(), ms(cur.last.created) + 1) }, { merge: true }));
 }
 
+// Вкладення: дані — у msgData (як photoData у фото), у повідомленні лише kind/name/file
+async function postMsg(tok, by, text, att) {
+  const extra = att ? { kind: att.kind, name: att.name, file: (await F.addDoc(F.collection(db, 'public', tok, 'msgData'), { data: att.data })).id } : {};
+  await F.addDoc(F.collection(db, 'public', tok, 'messages'), { by, text, created: F.serverTimestamp(), ...extra });
+}
+const chatAtt = new Map(); // форма → вкладення, що чекає на «Надіслати»
+function setAtt(form, a) {
+  a ? chatAtt.set(form, a) : chatAtt.delete(form);
+  const box = form.querySelector('.att');
+  box.hidden = !a;
+  box.innerHTML = a ? `${a.kind === 'image' ? `<img src="${a.data}" alt="">` : '📎'}<span>${esc(a.name)}</span><button type="button" class="x" data-unatt aria-label="Прибрати">✕</button>` : '';
+}
+async function attach(form, file) {
+  try {
+    const kind = /^image\/(jpeg|png|webp|heic|heif|bmp)$/.test(file.type) ? 'image' : 'file';
+    setAtt(form, { kind, name: (file.name || 'image.jpg').slice(0, 200), data: kind === 'image' ? await compress(file) : await readData(file) });
+    form.elements['text'].focus();
+  } catch (e) { toast('Не додано: ' + e.message); }
+}
 function sendMsg(form, tok, by) {
-  const ta = form.elements['text'], text = ta.value.trim().slice(0, 1000);
-  if (!text || !tok || !configured || !F) return;
+  const ta = form.elements['text'], text = ta.value.trim().slice(0, 1000), att = chatAtt.get(form);
+  if ((!text && !att) || !tok || !configured || !F) return;
   ta.value = '';
-  F.addDoc(F.collection(db, 'public', tok, 'messages'), { by, text, created: F.serverTimestamp() })
-    .catch(e => { ta.value ||= text; toast('Не надіслано: ' + e.message); });
+  setAtt(form, null);
+  postMsg(tok, by, text, att).catch(e => { ta.value ||= text; if (att) setAtt(form, att); toast('Не надіслано: ' + e.message); });
+}
+// Голосове: перше натискання — запис, друге — надіслати (до 3 хв, щоб влізти в документ Firestore)
+let rec = null;
+async function voice(btn, tok, by) {
+  if (rec) return rec.stop();
+  if (!tok || !F) return;
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return toast('Цей браузер не вміє записувати голос');
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch { return toast('Немає доступу до мікрофона'); }
+  const chunks = [], t0 = Date.now(), r = rec = new MediaRecorder(stream, { audioBitsPerSecond: 24000 });
+  r.ondataavailable = e => e.data.size && chunks.push(e.data);
+  const tick = setInterval(() => {
+    const sec = (Date.now() - t0) / 1000 | 0;
+    btn.textContent = `⏹ ${sec / 60 | 0}:${String(sec % 60).padStart(2, '0')}`;
+    if (sec >= 180 && r.state === 'recording') r.stop();
+  }, 250);
+  r.onstop = () => {
+    clearInterval(tick); stream.getTracks().forEach(t => t.stop());
+    rec = null; btn.textContent = '🎤'; btn.classList.remove('rec');
+    if (Date.now() - t0 < 1000 || !chunks.length) return toast('Запис закороткий');
+    const fr = new FileReader();
+    fr.onload = () => fr.result.length > 890000 ? toast('Запис завеликий, спробуй коротше')
+      : postMsg(tok, by, '', { kind: 'voice', name: 'voice', data: fr.result }).catch(e => toast('Не надіслано: ' + e.message));
+    fr.readAsDataURL(new Blob(chunks, { type: chunks[0].type || r.mimeType || 'audio/webm' }));
+  };
+  r.start(1000);
+  btn.classList.add('rec');
 }
 
 // ---------- Фото (учень завантажує на своїй сторінці, викладач бачить у «Учнях») ----------
 // Картинки лежать окремо (photoData), щоб список фото був легким
+// Дані з бази пише учень — пропускаємо лише чистий base64 data:, щоб у src/href не пролізли лапки й атрибути
+const isData = v => typeof v === 'string' && /^data:[\w.+-]+\/[\w.+-]+(;[\w.+-]+=[\w.+-]+)*;base64,[A-Za-z0-9+/=]+$/.test(v);
 function loadImg(tok, id) {
   if (imgCache[id]) return;
   imgCache[id] = 'loading';
   F.getDoc(F.doc(db, 'public', tok, 'photoData', id)).then(d => {
     const src = d.data()?.image;
-    imgCache[id] = typeof src === 'string' && src.startsWith('data:image/') ? src : 'none';
+    imgCache[id] = isData(src) && src.startsWith('data:image/') ? src : 'none';
     render();
     if ($('#photoDlg').open) openPhotos($('#photoDlg').dataset.name);
   }).catch(() => { imgCache[id] = 'none'; });
@@ -700,7 +770,7 @@ async function purgeStudent(n) {
   Object.entries(lessons).forEach(([k, v]) => v === n && refs.push(F.doc(db, 'lessons', k)));
   const all = async (...path) => (await F.getDocs(F.collection(db, ...path))).forEach(d => refs.push(d.ref));
   if (st.token) {
-    for (const c of ['photos', 'photoData', 'messages', 'notifs', 'subs', 'subData', 'spins', 'ratings', 'presence', 'avatar']) await all('public', st.token, c);
+    for (const c of ['photos', 'photoData', 'messages', 'msgData', 'notifs', 'subs', 'subData', 'spins', 'ratings', 'presence', 'avatar']) await all('public', st.token, c);
     refs.push(F.doc(db, 'public', st.token));
   }
   if (st.pid) { await all('portfolio', st.pid, 'works'); refs.push(F.doc(db, 'portfolio', st.pid)); }
@@ -960,8 +1030,18 @@ function showTab(tl, name) {
 document.querySelectorAll('.tabs').forEach(tl => tl.onclick = e => { const b = e.target.closest('button[data-tab]'); if (b) showTab(tl, b.dataset.tab); });
 
 // Чати
-$('#meChatForm').onsubmit = e => { e.preventDefault(); sendMsg(e.target, token, 'student'); };
-$('#tChatForm').onsubmit = e => { e.preventDefault(); sendMsg(e.target, students[chatName]?.token, 'teacher'); };
+document.querySelectorAll('.chat-form').forEach(f => {
+  const by = f.id === 'meChatForm' ? 'student' : 'teacher', tok = () => by === 'student' ? token : students[chatName]?.token;
+  f.onsubmit = e => { e.preventDefault(); sendMsg(f, tok(), by); };
+  f.onchange = e => { const i = e.target.closest('[data-att]'); if (i?.files[0]) attach(f, i.files[0]); if (i) i.value = ''; };
+  f.onclick = e => {
+    if (e.target.closest('[data-unatt]')) setAtt(f, null);
+    const v = e.target.closest('[data-voice]');
+    if (v) voice(v, tok(), by);
+  };
+  // Ctrl+V / «Вставити» на телефоні: картинка чи файл з буфера обміну
+  f.elements['text'].onpaste = e => { const file = e.clipboardData?.files?.[0]; if (file) { e.preventDefault(); attach(f, file); } };
+});
 // Enter — надіслати, Shift+Enter — новий рядок
 document.querySelectorAll('.chat-form textarea').forEach(t => t.onkeydown = e => {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); t.form.requestSubmit(); }
@@ -1513,9 +1593,9 @@ function feed() {
   const out = [];
   if (me) {
     for (const [id, x] of Object.entries(meNotifs)) out.push({ id, t: ms(x.created), icon: N_ICON[x.type] || '🔔', text: x.text, go: N_GO[x.type] || 'me-home' });
-    for (const [id, m] of Object.entries(meMsgs)) if (m.by === 'teacher') out.push({ id, t: ms(m.created), icon: '💬', text: `Викладач: ${m.text}`, go: 'me-chat' });
+    for (const [id, m] of Object.entries(meMsgs)) if (m.by === 'teacher') out.push({ id, t: ms(m.created), icon: '💬', text: `Викладач: ${msgText(m)}`, go: 'me-chat' });
   } else if (isTeacher) {
-    for (const [id, m] of Object.entries(msgs)) if (m.by === 'student') out.push({ id, t: ms(m.created), icon: '💬', text: `${nameByToken(m.token)}: ${m.text}`, go: 'tab:chats', chat: nameByToken(m.token) });
+    for (const [id, m] of Object.entries(msgs)) if (m.by === 'student') out.push({ id, t: ms(m.created), icon: '💬', text: `${nameByToken(m.token)}: ${msgText(m)}`, go: 'tab:chats', chat: nameByToken(m.token) });
     for (const x of Object.values(subs)) out.push({ id: x.id, t: ms(x.created), icon: '📬', text: `${nameByToken(x.token)} здав(ла) ДЗ`, go: 'tab:hw' });
     for (const [id, r] of Object.entries(requests)) out.push({ id, t: ms(r.created), icon: '📝', text: `Заявка: ${r.name}, ${shortSlot(`${r.date} ${r.hour}`)}`, go: 'tab:requests' });
     for (const x of Object.values(ratings)) out.push({ id: 'r' + x.id + x.token, t: ms(x.created), icon: '⭐', text: `${nameByToken(x.token)} оцінив(ла) урок ${shortDay(x.date)}: ${'★'.repeat(x.stars)}${x.comment ? ' · ' + x.comment : ''}`, go: 'tab:stats' });
@@ -1927,4 +2007,27 @@ if (!configured) {
         : A.signInWithPopup(auth, new A.GoogleAuthProvider()).catch(e => toast(e.message));
     })
     .catch(e => toast('Firebase не завантажився: ' + e.message));
+}
+
+// ---------- Мова сайту: Google Translate через cookie googtrans (оригінал — українська) ----------
+// shortcut: машинний переклад усієї сторінки; якщо треба вивірений текст — окремі словники i18n
+const LANGS = { uk: 'Українська', ru: 'Русский', en: 'English', de: 'Deutsch', pl: 'Polski', fr: 'Français', es: 'Español', it: 'Italiano',
+  pt: 'Português', nl: 'Nederlands', cs: 'Čeština', sk: 'Slovenčina', ro: 'Română', hu: 'Magyar', bg: 'Български', el: 'Ελληνικά',
+  sv: 'Svenska', da: 'Dansk', no: 'Norsk', fi: 'Suomi', et: 'Eesti', lv: 'Latviešu', lt: 'Lietuvių', hr: 'Hrvatski', sl: 'Slovenščina', sr: 'Српски', ga: 'Gaeilge' };
+const siteLang = document.cookie.match(/(?:^|;\s*)googtrans=\/uk\/([\w-]+)/)?.[1] || 'uk';
+$('#lang').innerHTML = Object.entries(LANGS).map(([k, v]) => `<option value="${k}"${k === siteLang ? ' selected' : ''}>${v}</option>`).join('');
+$('#langCode').textContent = siteLang.toUpperCase();
+$('#lang').onchange = e => {
+  const v = e.target.value, gone = v === 'uk' ? '; expires=Thu, 01 Jan 1970 00:00:00 GMT' : '';
+  // Google ставить cookie і на домен, і на .домен — ставимо/чистимо всі варіанти
+  for (const d of ['', '; domain=' + location.hostname, '; domain=.' + location.hostname.replace(/^www\./, '')])
+    document.cookie = `googtrans=/uk/${v}; path=/${d}${gone}`;
+  location.reload();
+};
+if (siteLang !== 'uk') {
+  window.gtInit = () => new google.translate.TranslateElement({ pageLanguage: 'uk', autoDisplay: false }, 'gt');
+  const sc = document.createElement('script');
+  sc.src = 'https://translate.google.com/translate_a/element.js?cb=gtInit';
+  sc.onerror = () => toast('Переклад недоступний — перевір інтернет');
+  document.head.append(sc);
 }

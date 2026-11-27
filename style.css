@@ -449,7 +449,27 @@ dialog.wide { width: min(760px, calc(100vw - 32px)); }
 .msg.mine { align-self: flex-end; border-radius: 16px 16px 4px 16px; background: linear-gradient(120deg, var(--acc), var(--acc2)); color: #fff; box-shadow: none; }
 .msg small { display: block; font-size: 11px; opacity: .7; text-align: right; }
 .chat-day { align-self: center; margin: 6px 0 2px; font-size: 12px; font-weight: 600; color: var(--mute); }
-.chat-form { display: flex; gap: 8px; align-items: flex-end; margin-top: 10px; }
+.chat-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-top: 10px; }
+.chat-form .ic { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 50%; background: var(--surf); box-shadow: inset 0 0 0 2px var(--line); font-size: 18px; cursor: pointer; }
+.chat-form .ic:hover { box-shadow: inset 0 0 0 2px var(--acc); }
+.chat-form .ic.rec { width: auto; padding: 0 12px; border-radius: 20px; font-size: 14px; font-weight: 600; color: #fff; background: #E5484D; box-shadow: none; animation: shimmer 1s ease-in-out infinite alternate; }
+.chat-form .att { flex-basis: 100%; display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 14px; background: var(--bg); position: relative; }
+.chat-form .att img { width: 48px; height: 48px; object-fit: cover; border-radius: 10px; }
+.chat-form .att span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.chat-form .att .x { position: static; }
+.msg-img { display: block; max-width: min(260px, 100%); max-height: 320px; border-radius: 12px; margin: 2px 0 4px; }
+.msg-wait { width: 200px; max-width: 100%; aspect-ratio: 4/3; height: auto; margin-bottom: 4px; }
+.msg audio { display: block; width: 240px; max-width: 100%; height: 40px; margin: 2px 0 4px; }
+.msg-file { display: inline-block; margin-bottom: 4px; color: inherit; font-weight: 600; text-decoration: underline; }
+/* Мова сайту */
+.lang { position: relative; display: grid; place-items: center; height: 38px; min-width: 44px; padding: 0 10px; border-radius: 19px; box-shadow: inset 0 0 0 2px var(--line); background: var(--surf); font-size: 13px; font-weight: 700; cursor: pointer; }
+.lang:hover, .lang:focus-within { box-shadow: inset 0 0 0 2px var(--acc); color: var(--acc); }
+.hdr-in .btn { white-space: nowrap; }
+.lang select { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; font-size: 16px; }
+/* ховаємо панель Google Translate, переклад лишається */
+body { top: 0 !important; }
+.skiptranslate iframe, #goog-gt-tt, .goog-te-balloon-frame { display: none !important; }
+font[style] { background: none !important; box-shadow: none !important; }
 .chat-form textarea { flex: 1; min-width: 0; resize: vertical; max-height: 160px; border: 0; box-shadow: inset 0 0 0 2px var(--line); border-radius: 18px; padding: 10px 14px; background: var(--surf); color: var(--ink); }
 .chat-form textarea:focus { outline: 0; box-shadow: inset 0 0 0 2px var(--acc); }
 .chats { display: grid; grid-template-columns: 260px 1fr; gap: 16px; }
@@ -519,6 +539,9 @@ dialog.wide { width: min(760px, calc(100vw - 32px)); }
   [data-view="chat"] :is(#meHi, #me .tabs) { display: none; }
   [data-view="chat"] #me { padding: 12px; }
   [data-view="chat"] .chat-msgs { height: calc(100dvh - 250px - env(safe-area-inset-bottom, 0px)); }
+  .chat-form > .btn { width: 44px; height: 40px; padding: 0; font-size: 0; }
+  .chat-form > .btn::after { content: '➤'; font-size: 18px; }
+  [data-view="chat"] .tab:has(.att:not([hidden])) .chat-msgs { height: calc(100dvh - 318px - env(safe-area-inset-bottom, 0px)); }
   #me .tabs [data-tab="me-chat"] { display: none; }
 }
 
