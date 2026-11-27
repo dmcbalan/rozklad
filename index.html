@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=Unbounded:wght@500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1795800000">
+<link rel="stylesheet" href="style.css?v=1796000000">
 </head>
 <body>
 
@@ -30,7 +30,7 @@
     <button id="bell" class="round bell" aria-label="Сповіщення" hidden><svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15ZM10 20.5a2 2 0 0 0 4 0"/></svg><b id="bellCount" hidden></b></button>
     <label class="lang notranslate"><span id="langCode">UK</span><select id="lang" aria-label="Мова / Language"></select></label>
     <button id="theme" class="round theme" aria-label="Тема"></button>
-    <a class="btn ghost sm" href="https://balanstudy.com.ua/">На сайт</a>
+    <a class="btn ghost sm site-link" href="https://balanstudy.com.ua/" aria-label="На сайт"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11 12 4l8 7M6 9.5V20h4.5v-5.5h3V20H18V9.5"/></svg><span>На сайт</span></a>
   </div>
 </header>
 
@@ -64,11 +64,14 @@
       <div id="meChat" class="chat-msgs"></div>
       <form id="meChatForm" class="chat-form">
         <div class="att" hidden></div>
-        <label class="ic" title="Фото з галереї"><input type="file" accept="image/*" data-att hidden>📷</label>
-        <label class="ic" title="Файл"><input type="file" data-att hidden>📎</label>
-        <textarea name="text" rows="1" maxlength="1000" placeholder="Напиши викладачу…" aria-label="Повідомлення"></textarea>
-        <button type="button" class="ic" data-voice title="Голосове: натисни, щоб почати, ще раз — надіслати">🎤</button>
-        <button class="btn sm">Надіслати</button>
+        <div class="composer">
+          <label class="ic" title="Фото з галереї"><input type="file" accept="image/*" data-att hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5h3.2L9 6h6l1.8 2.5H20V19H4Z"/><circle cx="12" cy="13.2" r="3.4"/></svg></label>
+          <textarea enterkeyhint="send" name="text" rows="1" maxlength="1000" placeholder="Напиши викладачу…" aria-label="Повідомлення"></textarea>
+          <label class="ic" title="Файл"><input type="file" data-att hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 11.5 12 19a5 5 0 0 1-7-7l7.8-7.8a3.3 3.3 0 0 1 4.7 4.7l-7.8 7.8a1.6 1.6 0 0 1-2.3-2.3l7.1-7.1"/></svg></label>
+        </div>
+        <button type="button" class="ic cancel" data-voicecancel hidden title="Скасувати запис" aria-label="Скасувати запис">✕</button>
+        <button type="button" class="ic act" data-voice title="Голосове: натисни, щоб почати, ще раз — надіслати" aria-label="Голосове повідомлення"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
+        <button class="btn sm act send" aria-label="Надіслати">Надіслати</button>
       </form>
     </div>
     <div id="tab-me-lessons" class="tab" hidden><div id="meLessons"></div></div>
@@ -102,6 +105,7 @@
     </div>
     <button id="tzBtn" class="btn ghost tzbtn" title="Змінити часовий пояс">🌍 <span id="tzLabel"></span></button>
     <button id="freeBtn" class="btn ghost free-toggle" aria-pressed="false">Вільні вікна</button>
+    <button id="trialBtn" class="btn trial-btn">🎁 Пробний урок</button>
     <label class="search">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input id="search" placeholder="Знайди своє ім'я…" autocomplete="off">
@@ -115,6 +119,8 @@
     <li><i class="k-makeup"></i>Відпрацювання</li>
     <li><i class="k-extra"></i>Додаткове</li>
     <li><i class="k-moved"></i>Перенос</li>
+    <li><i class="k-trial"></i>Пробний урок</li>
+    <li><i class="k-busy"></i>Зайнято</li>
     <li><i class="k-off"></i>Скасовано / перенесено</li>
   </ul>
   <div class="agenda" id="agenda"></div>
@@ -175,11 +181,14 @@
           <div id="tChat" class="chat-msgs"></div>
           <form id="tChatForm" class="chat-form">
             <div class="att" hidden></div>
-            <label class="ic" title="Фото з галереї"><input type="file" accept="image/*" data-att hidden>📷</label>
-            <label class="ic" title="Файл"><input type="file" data-att hidden>📎</label>
-            <textarea name="text" rows="1" maxlength="1000" placeholder="Відповісти учню…" aria-label="Повідомлення"></textarea>
-            <button type="button" class="ic" data-voice title="Голосове: натисни, щоб почати, ще раз — надіслати">🎤</button>
-            <button class="btn sm">Надіслати</button>
+            <div class="composer">
+              <label class="ic" title="Фото з галереї"><input type="file" accept="image/*" data-att hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5h3.2L9 6h6l1.8 2.5H20V19H4Z"/><circle cx="12" cy="13.2" r="3.4"/></svg></label>
+              <textarea enterkeyhint="send" name="text" rows="1" maxlength="1000" placeholder="Відповісти учню…" aria-label="Повідомлення"></textarea>
+              <label class="ic" title="Файл"><input type="file" data-att hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 11.5 12 19a5 5 0 0 1-7-7l7.8-7.8a3.3 3.3 0 0 1 4.7 4.7l-7.8 7.8a1.6 1.6 0 0 1-2.3-2.3l7.1-7.1"/></svg></label>
+            </div>
+            <button type="button" class="ic cancel" data-voicecancel hidden title="Скасувати запис" aria-label="Скасувати запис">✕</button>
+            <button type="button" class="ic act" data-voice title="Голосове: натисни, щоб почати, ще раз — надіслати" aria-label="Голосове повідомлення"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
+            <button class="btn sm act send" aria-label="Надіслати">Надіслати</button>
           </form>
         </div>
       </div>
@@ -324,7 +333,9 @@
     <div class="radios">
       <label><input type="radio" name="type" value="regular" checked> Щотижня в цей час</label>
       <label><input type="radio" name="type" value="once"> Тільки один раз</label>
+      <label><input type="radio" name="type" value="trial"> 🎁 Пробний урок (вперше)</label>
     </div>
+    <label class="fl">Телефон або Telegram<input name="contact" maxlength="100" autocomplete="tel" placeholder="Щоб викладач підтвердив час"></label>
     <label class="fl">Коментар (необов'язково)<textarea name="note" maxlength="300" rows="2"></textarea></label>
     <div class="actions"><button class="btn">Надіслати заявку</button></div>
   </form>
@@ -332,7 +343,7 @@
 
 <div id="toast" role="status"></div>
 
-<script src="config.js?v=1795800000"></script>
-<script src="app.js?v=1795800000"></script>
+<script src="config.js?v=1796000000"></script>
+<script src="app.js?v=1796000000"></script>
 </body>
 </html>

@@ -17,7 +17,8 @@ const CHARGED = ['present', 'absent'];
 // Ціни: кнопки швидкої оплати в «Учнях»
 const PACKS = [{ n: 1, sum: 350 }, { n: 10, sum: 3500 }, { n: 20, sum: 6500 }];
 const LABEL = { present: 'Був', absent: 'Пропустив', excused: 'Перенесено' };
-const KIND = { regular: 'За розкладом', makeup: 'Відпрацювання', extra: 'Додаткове', moved: 'Перенос' };
+const KIND = { regular: 'За розкладом', makeup: 'Відпрацювання', extra: 'Додаткове', moved: 'Перенос', trial: 'Пробний', busy: 'Зайнято' };
+const TRIAL_RES = { yes: '✅ Продовжує', think: '🤔 Думає', no: '❌ Не продовжує' };
 const remaining = (paid, records) => (paid || 0) - records.filter(r => CHARGED.includes(r.status)).length;
 console.assert(remaining(8, [{ status: 'present' }, { status: 'absent' }, { status: 'excused' }]) === 6, 'remaining()');
 
@@ -47,8 +48,11 @@ const isManual = b => MEDAL[b]?.c !== 'Автоматичні';
 // Колесо фортуни: раз на тиждень, якщо за останні 7 днів був урок. s — підпис на колесі, w — вага (шанс)
 const PRIZES = [
   { s: '+10', t: '+10 XP', xp: 10, w: 22 }, { s: '+25', t: '+25 XP', xp: 25, w: 15 }, { s: '🎯', t: 'Тема уроку на вибір 🎯', w: 9 }, { s: '+15', t: '+15 XP', xp: 15, w: 20 },
-  { s: '+50', t: '+50 XP', xp: 50, w: 6 }, { s: '⏱', t: '+10 хв до уроку ⏱', w: 9 }, { s: '🍀', t: 'Медаль «Щасливчик» 🍀 і +20 XP', xp: 20, lucky: true, w: 8 }, { s: '🎁', t: 'Сюрприз від викладача 🎁', w: 11 },
+  { s: '+50', t: '+50 XP', xp: 50, w: 6 }, { s: '⏱', t: '+10 хв до уроку ⏱', w: 0 }, { s: '🍀', t: 'Медаль «Щасливчик» 🍀 і +20 XP', xp: 20, lucky: true, w: 8 }, { s: '🎁', t: 'Сюрприз від викладача 🎁', w: 11 },
+  // нові призи — лише в кінець: у базі зберігається індекс
+  { s: '+70', t: '+70 XP', xp: 70, w: 5 }, { s: '🦄', t: 'Ріг єдинорога для персонажа 🦄', item: 'unicorn', w: 5 }, { s: '🌈', t: 'Веселкові крила для персонажа 🌈', item: 'rainbow', w: 5 },
 ];
+const WHEEL = PRIZES.map((_, i) => i).filter(i => PRIZES[i].w > 0); // сектори колеса; призи з w: 0 лише показуються тим, хто їх виграв
 // Рівень: 1→2 потрібно 100 XP, далі кожен рівень на 50 XP довший
 function levelOf(xp) { let lvl = 1, need = 100, rest = xp; while (rest >= need) { rest -= need; lvl++; need += 50; } return { lvl, rest, need }; }
 console.assert(levelOf(0).lvl === 1 && levelOf(100).lvl === 2 && levelOf(249).lvl === 2 && levelOf(250).lvl === 3, 'levelOf()');
@@ -173,13 +177,15 @@ function slotsOn(date) {
   for (const h of HOURS) if (lessons[`${d}-${h}`]) res[h] = { student: lessons[`${d}-${h}`], kind: 'regular' };
   for (const [id, c] of Object.entries(changes)) {
     if (c.date !== date) continue;
+    if (c.kind === 'trial' && c.done) continue; // проведений пробний знімається з розкладу, лишається в «Заявки → Пробні»
     if (c.kind === 'cancel') { if (res[c.hour]?.kind === 'regular') Object.assign(res[c.hour], { cancelled: id, to: c.to }); }
-    else res[c.hour] = { student: c.student, kind: c.kind, id, from: c.from };
+    else res[c.hour] = { student: c.student, kind: c.kind, id, from: c.from, note: c.note };
   }
   return res;
 }
 
 function chip(s, q) {
+  if (s.kind === 'busy') return `<span class="chip k-busy${q ? ' dim' : ''}"><span>⛔ Зайнято</span>${isTeacher && s.note ? `<em>${esc(s.note)}</em>` : ''}</span>`;
   const dim = q && !s.student.toLowerCase().includes(q) ? ' dim' : '';
   const tag = s.cancelled ? `<em>${s.to ? '→ ' + shortSlot(s.to) : 'скасовано'}</em>`
     : s.kind !== 'regular' ? `<em>${KIND[s.kind]}</em>` : '';
@@ -256,9 +262,9 @@ function renderWeek() {
   $('#weekLabel').textContent = a.getMonth() === b.getMonth()
     ? `${a.getDate()} – ${longDate(end)}` : `${longDate(week)} – ${longDate(end)}`;
   $('#thisWeek').hidden = week <= today && today <= end;
-  const all = DAYS.map((_, i) => Object.values(slotsOn(addDays(week, i)))).flat().filter(s => !s.cancelled);
+  const all = DAYS.map((_, i) => Object.values(slotsOn(addDays(week, i)))).flat().filter(s => !s.cancelled && s.kind !== 'busy');
   $('#stats').innerHTML = `<div><b>${all.length}</b><small>занять цього тижня</small></div>
-    <div><b>${new Set(all.map(s => s.student)).size}</b><small>учнів</small></div>
+    <div><b>${new Set(all.filter(s => s.kind !== 'trial').map(s => s.student)).size}</b><small>учнів</small></div>
     <div><b>1:1</b><small>індивідуально</small></div>`;
 }
 
@@ -389,7 +395,7 @@ function renderMsgs(el, list, mine, key, tok) {
     const t = new Date(ms(m.created) || Date.now()), d = iso(t);
     const sep = d !== day ? `<p class="chat-day">${longDate(d)}</p>` : '';
     day = d;
-    return `${sep}<div class="msg${m.by === mine ? ' mine' : ''}">${msgAtt(m, tok)}${esc(m.text || '')}<small>${t.toLocaleTimeString('uk', { hour: '2-digit', minute: '2-digit' })}</small></div>`;
+    return `${sep}<div class="msg${m.by === mine ? ' mine' : ''}">${m.by === mine && m.id ? `<button class="msg-del" data-delmsg="${m.id}" title="Скасувати повідомлення" aria-label="Скасувати повідомлення">✕</button>` : ''}${msgAtt(m, tok)}${esc(m.text || '')}<small>${t.toLocaleTimeString('uk', { hour: '2-digit', minute: '2-digit' })}</small></div>`;
   }).join('') : `<p class="empty">${mine === 'student' ? 'Напиши викладачу: питання про урок, ДЗ чи перенос заняття.' : 'Ще немає повідомлень'}</p>`;
   // перемальовуємо лише при змінах — інакше голосове обривається на кожному оновленні
   if (el._html !== html) el.innerHTML = el._html = html;
@@ -399,7 +405,7 @@ function renderMsgs(el, list, mine, key, tok) {
 
 let meSeen = 0; // час останнього прочитаного повідомлення (у цьому браузері)
 function renderMeChat() {
-  const list = byTime(Object.values(meMsgs));
+  const list = byTime(Object.entries(meMsgs).map(([id, m]) => ({ ...m, id })));
   if (!$('#tab-me-chat').hidden && list.length && ms(list.at(-1).created) > meSeen) {
     meSeen = ms(list.at(-1).created);
     try { localStorage.setItem('rozklad-chat-' + token, meSeen); } catch {}
@@ -413,7 +419,7 @@ function renderMeChat() {
 let chatName = null;
 function renderChats() {
   const byTok = {};
-  for (const m of Object.values(msgs)) (byTok[m.token] ||= []).push(m);
+  for (const [id, m] of Object.entries(msgs)) (byTok[m.token] ||= []).push({ ...m, id });
   const people = Object.entries(students).filter(([n, st]) => st.token && !isArchived(n)).map(([n, st]) => {
     const list = byTime(byTok[st.token] || []);
     return { n, list, last: list.at(-1), unread: list.filter(m => m.by === 'student' && ms(m.created) > (st.seenChat || 0)).length };
@@ -458,7 +464,7 @@ async function attach(form, file) {
 function sendMsg(form, tok, by) {
   const ta = form.elements['text'], text = ta.value.trim().slice(0, 1000), att = chatAtt.get(form);
   if ((!text && !att) || !tok || !configured || !F) return;
-  ta.value = '';
+  ta.value = ''; ta.style.height = '';
   setAtt(form, null);
   postMsg(tok, by, text, att).catch(e => { ta.value ||= text; if (att) setAtt(form, att); toast('Не надіслано: ' + e.message); });
 }
@@ -470,7 +476,7 @@ async function voice(btn, tok, by) {
   if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return toast('Цей браузер не вміє записувати голос');
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch { return toast('Немає доступу до мікрофона'); }
-  const chunks = [], t0 = Date.now(), r = rec = new MediaRecorder(stream, { audioBitsPerSecond: 24000 });
+  const icon = btn.innerHTML, chunks = [], t0 = Date.now(), r = rec = new MediaRecorder(stream, { audioBitsPerSecond: 24000 }), cancelBtn = btn.form.querySelector('[data-voicecancel]');
   r.ondataavailable = e => e.data.size && chunks.push(e.data);
   const tick = setInterval(() => {
     const sec = (Date.now() - t0) / 1000 | 0;
@@ -479,7 +485,8 @@ async function voice(btn, tok, by) {
   }, 250);
   r.onstop = () => {
     clearInterval(tick); stream.getTracks().forEach(t => t.stop());
-    rec = null; btn.textContent = '🎤'; btn.classList.remove('rec');
+    rec = null; btn.innerHTML = icon; btn.classList.remove('rec'); cancelBtn.hidden = true;
+    if (r.cancelled) return toast('Запис скасовано');
     if (Date.now() - t0 < 1000 || !chunks.length) return toast('Запис закороткий');
     const fr = new FileReader();
     fr.onload = () => fr.result.length > 890000 ? toast('Запис завеликий, спробуй коротше')
@@ -488,6 +495,7 @@ async function voice(btn, tok, by) {
   };
   r.start(1000);
   btn.classList.add('rec');
+  cancelBtn.hidden = false;
 }
 
 // ---------- Фото (учень завантажує на своїй сторінці, викладач бачить у «Учнях») ----------
@@ -601,6 +609,7 @@ function renderNav() {
 
 function render() {
   if (folioId) return renderFolio();
+  $('#trialBtn').hidden = !!me;
   const q = $('#search').value.trim().toLowerCase(), v = viewWeek(), memo = {}, on = d => memo[d] ||= slotsOn(d);
   $('#tzLabel').textContent = tz === BASE_TZ ? 'Київський час' : `${tzName(tz)} · ${gmt(tz)}`;
   $('#tzBtn').classList.toggle('on', tz !== BASE_TZ);
@@ -650,6 +659,7 @@ function renderMarks(rem) {
   for (const [id, x] of Object.entries(attendance)) if (x.date === date) (dayRecs[x.student] ||= []).push([id, x]);
   const slots = {}, off = {};
   for (const [h, s] of Object.entries(slotsOn(date))) {
+    if (s.kind === 'busy' || s.kind === 'trial') continue; // пробний закривається у своєму вікні, не абонементом
     if (s.cancelled) (off[s.student] ||= []).push(s.to ? '→ ' + shortSlot(s.to) : 'скасовано');
     else (slots[s.student] ||= []).push({ h: +h, kind: s.kind });
   }
@@ -852,10 +862,20 @@ function renderRequests() {
     <div class="req">
       <span class="avatar" style="--h:${hue(r.name)}">${esc(r.name[0] || '?')}</span>
       <div class="who"><b>${esc(r.name)}</b>
-        <small>${DAYS[dayIdx(parseIso(r.date))]}, ${longDate(r.date)} · ${pad(r.hour)}:00 · ${r.type === 'regular' ? 'щотижня' : 'разово'}</small>
-        ${r.note ? `<small>${esc(r.note)}</small>` : ''}</div>
+        <small>${DAYS[dayIdx(parseIso(r.date))]}, ${longDate(r.date)} · ${pad(r.hour)}:00 · ${{ regular: 'щотижня', once: 'разово', trial: '🎁 пробний урок' }[r.type] || ''}</small>
+        ${r.contact ? `<small>📞 ${esc(r.contact)}</small>` : ''}${r.note ? `<small>${esc(r.note)}</small>` : ''}</div>
       <div class="req-actions"><button class="ghost danger" data-req="${id}" data-act="no">Відхилити</button><button class="primary" data-req="${id}" data-act="yes">Прийняти</button></div>
-    </div>`).join('') : '<p class="empty">Нових заявок немає. Учні залишають їх через кнопку «Вільні вікна».</p>';
+    </div>`).join('') : '<p class="empty">Нових заявок немає. Учні залишають їх через кнопку «Вільні вікна» або «Пробний урок».</p>';
+  const trials = Object.entries(changes).filter(([, c]) => c.kind === 'trial')
+    .sort((a, b) => (b[1].date + pad(b[1].hour)).localeCompare(a[1].date + pad(a[1].hour)));
+  $('#requests').innerHTML += `<h4 class="sep">🎁 Пробні уроки</h4>` + (trials.length ? trials.map(([id, c]) => `
+    <div class="req">
+      <span class="avatar" style="--h:${hue(c.student)}">${esc(c.student[0] || '?')}</span>
+      <div class="who"><b>${esc(c.student)}</b>
+        <small>${DAYS[dayIdx(parseIso(c.date))]}, ${longDate(c.date)} · ${pad(c.hour)}:00 · ${c.done ? TRIAL_RES[c.result] || 'проведено' : 'заплановано'}</small>
+        ${c.note ? `<small>${esc(c.note)}</small>` : ''}</div>
+      <div class="req-actions"><button class="ghost" data-trial="${id}">${c.done ? 'Змінити' : 'Підсумок'}</button></div>
+    </div>`).join('') : '<p class="muted small">Ще не було пробних. Додай через клітинку розкладу («+ Пробний») або прийми заявку.</p>');
 }
 
 // ----- Готові повідомлення батькам (копіюються в буфер) -----
@@ -910,12 +930,17 @@ function openCell(date, h) {
   dlg.dataset.date = date; dlg.dataset.hour = h;
   let body = `<button type="button" class="x" data-act="close" aria-label="Закрити">✕</button>
     <h3>${DAYS[d]}, ${longDate(date)} · ${pad(h)}:00</h3>`;
-  if (s && s.kind !== 'regular') {
+  if (s?.kind === 'trial') return openTrial(s.id);
+  if (s?.kind === 'busy') {
+    body += `<p class="kind-line"><span class="tag k-busy">⛔ Зайнято</span> ${esc(s.note || 'без причини')}</p>
+      <p class="muted small">Усі бачать цей час як зайнятий, записатися на нього не можна.</p>
+      <div class="actions"><button data-act="delOnce" class="ghost danger">Звільнити час</button></div>`;
+  } else if (s && s.kind !== 'regular') {
     body += `<p class="kind-line"><span class="tag k-${s.kind}">${KIND[s.kind]}</span> <b>${esc(s.student)}</b> — разове заняття${s.from ? `, перенесено з ${shortSlot(s.from)}` : ''}</p>
       <div class="actions"><button data-act="delOnce" class="ghost danger">${s.from ? 'Скасувати перенос (повернути назад)' : 'Видалити разове заняття'}</button></div>`;
   } else if (s?.cancelled) {
     body += `<p class="kind-line"><b>${esc(s.student)}</b>: цього тижня ${s.to ? 'перенесено на ' + shortSlot(s.to) : 'скасовано'}</p>
-      <div class="actions"><button data-act="restore" class="primary">Повернути заняття на місце</button></div>`;
+      <div class="actions"><button data-act="restore" class="primary">Повернути заняття на місце</button></div>` + BUSY_FORM;
   } else {
     body += `<label class="fl">Учень<input id="editName" list="names" value="${esc(s?.student || '')}" placeholder="Ім'я учня" autocomplete="off"></label>
       <div class="actions"><button data-act="save" class="primary">${s ? 'Зберегти в постійному розкладі' : 'Додати в постійний розклад'}</button>
@@ -928,11 +953,31 @@ function openCell(date, h) {
         <label class="fl">Причина<select id="mvKind"><option value="makeup">Я не можу → відпрацювання</option><option value="moved">Учень попросив → перенос</option></select></label>
       </div>
       <div class="actions"><button data-act="move" class="primary">Перенести</button><button data-act="cancelOnce" class="ghost">Просто скасувати</button></div>`
-      : `<div class="actions"><button data-act="once-makeup" class="ghost tagbtn k-makeup">+ Відпрацювання</button><button data-act="once-extra" class="ghost tagbtn k-extra">+ Додаткове</button></div>
-      <p class="muted small">Разове заняття тільки на цю дату для учня з поля вище.</p>`;
+      : `<div class="actions"><button data-act="once-makeup" class="ghost tagbtn k-makeup">+ Відпрацювання</button><button data-act="once-extra" class="ghost tagbtn k-extra">+ Додаткове</button><button data-act="once-trial" class="ghost tagbtn k-trial">+ Пробний</button></div>
+      <p class="muted small">Разове заняття тільки на цю дату для учня з поля вище. Пробний не створює учня.</p>` + BUSY_FORM;
   }
   dlg.innerHTML = body;
   dlg.showModal();
+}
+
+const BUSY_FORM = `<h4 class="sep">⛔ Зайняти цей час</h4>
+  <label class="fl">Причина (у розкладі не показується, лише тобі)<input id="busyNote" maxlength="80" placeholder="Напр.: созвон по сайту"></label>
+  <div class="actions"><button data-act="busy" class="ghost tagbtn k-busy">Позначити зайнятим</button></div>`;
+
+// Пробний: після уроку — хто був, чи продовжує, поповнення абонемента; проведений зникає з розкладу
+function openTrial(id) {
+  const c = changes[id], dlg = $('#edit');
+  if (!c) return;
+  dlg.dataset.date = c.date; dlg.dataset.hour = c.hour; dlg.dataset.trial = id;
+  dlg.innerHTML = `<button type="button" class="x" data-act="close" aria-label="Закрити">✕</button>
+    <h3>🎁 Пробний · ${DAYS[dayIdx(parseIso(c.date))]}, ${longDate(c.date)} · ${pad(c.hour)}:00</h3>
+    ${c.note ? `<p class="muted">${esc(c.note)}</p>` : ''}
+    <label class="fl">Хто був на пробному<input id="editName" list="names" value="${esc(c.student)}" autocomplete="off"></label>
+    <label class="fl">Результат<select id="trRes">${Object.entries(TRIAL_RES).map(([k, v]) => `<option value="${k}"${c.result === k ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
+    <label class="fl">Поповнення абонемента<select id="trPack"><option value="">Без оплати зараз</option>${PACKS.map((p, i) => `<option value="${i}">${p.n} ${lessonsWord(p.n)} — ${money(p.sum)}</option>`).join('')}</select></label>
+    <p class="muted small">«Продовжує» додає учня в «Учні», оплата йде в абонемент. Пробний зникає з розкладу й лишається в «Заявки → Пробні уроки».</p>
+    <div class="actions"><button data-act="trialDone" class="primary">✅ Проведено</button><button data-act="trialDel" class="ghost danger">Видалити пробний</button></div>`;
+  if (!dlg.open) dlg.showModal();
 }
 
 function delChange(id) {
@@ -954,16 +999,29 @@ $('#edit').onclick = e => {
   switch (b.dataset.act) {
     case 'save': if (needName()) return; p = Promise.all([F.setDoc(F.doc(db, 'lessons', key), { student: name }), ensureStudent(name)]); break;
     case 'del': p = F.deleteDoc(F.doc(db, 'lessons', key)); break;
-    case 'once-makeup': case 'once-extra':
+    case 'once-makeup': case 'once-extra': case 'once-trial': {
       if (needName()) return;
-      p = Promise.all([F.addDoc(F.collection(db, 'changes'), { date, hour: h, student: name, kind: b.dataset.act.slice(5) }), ensureStudent(name)]);
+      const kind = b.dataset.act.slice(5);
+      p = F.addDoc(F.collection(db, 'changes'), { date, hour: h, student: name, kind });
+      if (kind !== 'trial') p = Promise.all([p, ensureStudent(name)]); // пробний — ще не учень
       break;
+    }
+    case 'busy': p = F.addDoc(F.collection(db, 'changes'), { date, hour: h, student: '', kind: 'busy', note: ($('#busyNote').value || '').trim().slice(0, 80) }); break;
+    case 'trialDone': {
+      if (needName()) return;
+      const res = $('#trRes').value, pk = PACKS[$('#trPack').value];
+      p = F.setDoc(F.doc(db, 'changes', dlg.dataset.trial), { done: true, result: res, student: name }, { merge: true });
+      if (res === 'yes') p = Promise.all([p, ensureStudent(name)]);
+      if (pk) pay(name, pk.n, pk.sum);
+      break;
+    }
+    case 'trialDel': p = F.deleteDoc(F.doc(db, 'changes', dlg.dataset.trial)); break;
     case 'cancelOnce': p = F.addDoc(F.collection(db, 'changes'), { date, hour: h, student: s.student, kind: 'cancel' }); break;
     case 'move': {
       const to = $('#mvDate').value, th = +$('#mvHour').value, kind = $('#mvKind').value;
       if (!to || (to === date && th === h)) return toast('Обери інший день або час');
       const busy = slotsOn(to)[th];
-      if (busy && !busy.cancelled) return toast(`Цей час уже зайнятий: ${busy.student}`);
+      if (busy && !busy.cancelled) return toast(`Цей час уже зайнятий: ${busy.student || 'зайнято'}`);
       const bt = F.writeBatch(db), cRef = F.doc(F.collection(db, 'changes')), oRef = F.doc(F.collection(db, 'changes'));
       bt.set(cRef, { date, hour: h, student: s.student, kind: 'cancel', to: `${to} ${th}`, link: oRef.id });
       bt.set(oRef, { date: to, hour: th, student: s.student, kind, from: `${date} ${h}`, link: cRef.id });
@@ -1036,10 +1094,24 @@ document.querySelectorAll('.chat-form').forEach(f => {
   f.onchange = e => { const i = e.target.closest('[data-att]'); if (i?.files[0]) attach(f, i.files[0]); if (i) i.value = ''; };
   f.onclick = e => {
     if (e.target.closest('[data-unatt]')) setAtt(f, null);
+    if (e.target.closest('[data-voicecancel]') && rec) { rec.cancelled = true; return rec.stop(); }
     const v = e.target.closest('[data-voice]');
     if (v) voice(v, tok(), by);
   };
   // Ctrl+V / «Вставити» на телефоні: картинка чи файл з буфера обміну
+  // Скасувати своє повідомлення: зникає в обох разом із файлом
+  const box = f.previousElementSibling;
+  box.onclick = e => {
+    const b = e.target.closest('[data-delmsg]'), id = b?.dataset.delmsg, m = id && (by === 'student' ? meMsgs : msgs)[id];
+    if (!b) return e.target.closest('.msg.mine')?.classList.toggle('sel');
+    if (!m || !tok() || !confirm('Скасувати це повідомлення? Воно зникне і в співрозмовника.')) return;
+    const bt = F.writeBatch(db);
+    bt.delete(F.doc(db, 'public', tok(), 'messages', id));
+    if (m.file) bt.delete(F.doc(db, 'public', tok(), 'msgData', m.file));
+    run(bt.commit());
+  };
+  // поле росте разом із текстом (як у Telegram)
+  f.elements['text'].oninput = e => { const t = e.target; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 140) + 'px'; };
   f.elements['text'].onpaste = e => { const file = e.clipboardData?.files?.[0]; if (file) { e.preventDefault(); attach(f, file); } };
 });
 // Enter — надіслати, Shift+Enter — новий рядок
@@ -1094,11 +1166,20 @@ $('#tzList').onclick = e => {
   render();
 };
 
+let bookTrial = false; // заявку відкрито кнопкою «Пробний урок»
 $('#freeBtn').onclick = () => {
   const on = document.body.classList.toggle('free');
+  if (!on) bookTrial = false;
   $('#freeBtn').setAttribute('aria-pressed', on);
   $('#freeHint').hidden = !on;
+  $('#freeHint').textContent = bookTrial ? 'Обери зручну вільну клітинку — це буде твій пробний урок 🎁' : 'Обери вільну клітинку, щоб залишити заявку на заняття.';
   render();
+};
+$('#trialBtn').onclick = () => {
+  bookTrial = true;
+  document.body.classList.remove('free');
+  $('#freeBtn').click();
+  $('#freeHint').scrollIntoView({ block: 'center', behavior: 'smooth' });
 };
 
 $('#grid').onclick = $('#agenda').onclick = e => {
@@ -1111,6 +1192,7 @@ $('#grid').onclick = $('#agenda').onclick = e => {
     if (!configured) return toast('Спочатку підключи Firebase');
     const f = $('#bookForm');
     f.dataset.date = date; f.dataset.hour = h;
+    f.elements['type'].value = bookTrial ? 'trial' : 'regular';
     $('#bookSlot').textContent = whenText(instant(date, h * 60, BASE_TZ)) + (tz !== BASE_TZ ? ` (${kyivNote(h)})` : '');
     return $('#book').showModal();
   }
@@ -1122,24 +1204,28 @@ $('#bookForm').onsubmit = e => {
   e.preventDefault();
   const f = e.target, el = f.elements;
   const data = { date: f.dataset.date, hour: +f.dataset.hour, name: el['name'].value.trim().slice(0, 60), note: el['note'].value.trim().slice(0, 300),
-    type: el['type'].value, created: F.serverTimestamp() };
+    contact: el['contact'].value.trim().slice(0, 100), type: el['type'].value, created: F.serverTimestamp() };
   if (!data.name) return toast("Вкажи своє ім'я");
+  if (data.type === 'trial' && !data.contact) return toast('Залиш телефон або Telegram, щоб викладач підтвердив пробний');
   run(F.addDoc(F.collection(db, 'requests'), data).then(() => {
-    $('#book').close(); f.reset(); toast('Заявку надіслано! Викладач зв\'яжеться з тобою');
+    $('#book').close(); f.reset(); if (bookTrial) $('#freeBtn').click(); toast('Заявку надіслано! Викладач зв\'яжеться з тобою');
   }));
 };
 
 $('#requests').onclick = e => {
+  const t = e.target.closest('[data-trial]');
+  if (t) return openTrial(t.dataset.trial);
   const b = e.target.closest('[data-req]');
   if (!b) return;
   const id = b.dataset.req, r = requests[id];
   if (b.dataset.act === 'no') return run(F.deleteDoc(F.doc(db, 'requests', id)));
   const name = cleanName(r.name), slot = slotsOn(r.date)[r.hour];
-  if (slot && !slot.cancelled) return toast(`Цей час уже зайнятий: ${slot.student}`);
+  if (slot && !slot.cancelled) return toast(`Цей час уже зайнятий: ${slot.student || 'зайнято'}`);
   const bt = F.writeBatch(db);
   if (r.type === 'regular') bt.set(F.doc(db, 'lessons', `${dayIdx(parseIso(r.date))}-${r.hour}`), { student: name });
+  else if (r.type === 'trial') bt.set(F.doc(F.collection(db, 'changes')), { date: r.date, hour: r.hour, student: name, kind: 'trial', note: [r.contact, r.note].filter(Boolean).join(' · ').slice(0, 300) });
   else bt.set(F.doc(F.collection(db, 'changes')), { date: r.date, hour: r.hour, student: name, kind: 'extra' });
-  bt.set(F.doc(db, 'students', name), { name }, { merge: true });
+  if (r.type !== 'trial') bt.set(F.doc(db, 'students', name), { name }, { merge: true });
   bt.delete(F.doc(db, 'requests', id));
   run(bt.commit().then(() => toast(`${name} додано в розклад`)));
 };
@@ -1312,9 +1398,9 @@ const weekKey = () => { const t = tzParts(BASE_TZ, Date.now()).date; return addD
 const AV = {
   kind: [['blob', 'Круглик', 1], ['cat', 'Котик', 1], ['robot', 'Робот', 4]],
   color: [['#3D5AFE', '', 1], ['#0FB48F', '', 1], ['#E0408A', '', 1], ['#FFB020', '', 1], ['#9B5CFF', '', 3], ['#12C2A0', '', 3], ['#FF6B3D', '', 5], ['#1E293B', '', 7], ['#E8B923', '', 9]],
-  head: [['none', 'Нічого', 1], ['cap', 'Кепка', 2], ['phones', 'Навушники', 4], ['wizard', 'Капелюх мага', 6], ['crown', 'Корона', 10]],
+  head: [['none', 'Нічого', 1], ['cap', 'Кепка', 2], ['phones', 'Навушники', 4], ['wizard', 'Капелюх мага', 6], ['crown', 'Корона', 10], ['unicorn', 'Ріг єдинорога', 'wheel']],
   face: [['none', 'Нічого', 1], ['glasses', 'Окуляри', 3], ['shades', 'Темні окуляри', 5], ['mask', 'Маска героя', 8]],
-  back: [['none', 'Нічого', 1], ['cape', 'Плащ', 4], ['wings', 'Крила', 7], ['jet', 'Реактивний ранець', 12]],
+  back: [['none', 'Нічого', 1], ['cape', 'Плащ', 4], ['wings', 'Крила', 7], ['jet', 'Реактивний ранець', 12], ['rainbow', 'Веселкові крила', 'wheel']],
 };
 const AV_LABEL = { kind: 'Персонаж', color: 'Колір', head: 'Голова', face: 'Обличчя', back: 'Спина' };
 const AV_DEFAULT = { kind: 'blob', color: '#3D5AFE', head: 'none', face: 'none', back: 'none' };
@@ -1323,6 +1409,7 @@ function avatarSvg(a = AV_DEFAULT, lvl = 1, px = 120) {
   const c = /^#[0-9A-Fa-f]{6}$/.test(a.color) ? a.color : AV_DEFAULT.color, robot = a.kind === 'robot';
   const back = { cape: '<path d="M34 62Q60 50 86 62L98 112Q60 100 22 112Z" fill="#E5364F"/>',
     wings: '<path d="M30 66Q2 38 8 80Q18 72 30 86ZM90 66Q118 38 112 80Q102 72 90 86Z" fill="#fff" stroke="#BFD0FF" stroke-width="2"/>',
+    rainbow: '<defs><linearGradient id="avRb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF4D6D"/><stop offset=".25" stop-color="#FFB020"/><stop offset=".5" stop-color="#3DDC84"/><stop offset=".75" stop-color="#3D8BFF"/><stop offset="1" stop-color="#9B5CFF"/></linearGradient></defs><path d="M30 66Q-2 30 4 84Q16 74 30 90ZM90 66Q122 30 116 84Q104 74 90 90Z" fill="url(#avRb)" stroke="#fff" stroke-width="2"/>',
     jet: '<rect x="18" y="56" width="14" height="36" rx="6" fill="#8A97AB"/><rect x="88" y="56" width="14" height="36" rx="6" fill="#8A97AB"/><path d="M20 92l5 16 5-16ZM90 92l5 16 5-16Z" fill="#FFB020"/>' }[a.back] || '';
   const ears = a.kind === 'cat' ? `<path d="M30 52L33 16L56 38ZM90 52L87 16L64 38Z" fill="${c}"/><path d="M36 42L38 26L49 37ZM84 42L82 26L71 37Z" fill="#fff" opacity=".45"/>` : '';
   const ant = robot ? '<path d="M60 32V18" stroke="#8A97AB" stroke-width="3"/><circle cx="60" cy="15" r="5" fill="#FFD23F"/>' : '';
@@ -1335,6 +1422,7 @@ function avatarSvg(a = AV_DEFAULT, lvl = 1, px = 120) {
   const head = { cap: '<path d="M30 46Q60 12 90 46Z" fill="#E5364F"/><path d="M80 44Q100 44 104 50H82Z" fill="#B3243A"/>',
     phones: '<path d="M22 64Q22 24 60 24Q98 24 98 64" fill="none" stroke="#14213D" stroke-width="5"/><rect x="14" y="56" width="14" height="22" rx="6" fill="#14213D"/><rect x="92" y="56" width="14" height="22" rx="6" fill="#14213D"/>',
     wizard: '<path d="M34 42L60 0L86 42Z" fill="#7A4DFF"/><path d="M26 42Q60 52 94 42Q60 34 26 42Z" fill="#5B3DF0"/><path d="M60 14l2 5 5 1-4 3 1 5-4-3-4 3 1-5-4-3 5-1Z" fill="#FFD23F"/>',
+    unicorn: '<path d="M53 38L60 2L67 38Z" fill="#FFE3F4" stroke="#E0408A" stroke-width="2" stroke-linejoin="round"/><path d="M55 30l10-4M57 20l7-3M58 12l4-1.5" stroke="#E0408A" stroke-width="2" stroke-linecap="round"/>',
     crown: '<path d="M38 40L36 16L48 28L60 10L72 28L84 16L82 40Z" fill="#FFD23F" stroke="#C98B00" stroke-width="2"/><circle cx="60" cy="30" r="3" fill="#E5364F"/>' }[a.head] || '';
   const aura = lvl >= 10 ? '<circle cx="60" cy="66" r="58" fill="#FFD23F" opacity=".22"/><circle cx="60" cy="66" r="50" fill="#FFD23F" opacity=".18"/>' : '';
   return `<svg viewBox="0 0 120 120" width="${px}" height="${px}" aria-hidden="true">${aura}${back}${ears}${ant}${body}<ellipse cx="60" cy="88" rx="20" ry="13" fill="#fff" opacity=".25"/>${mask}${eyes}${mouth}${face}${head}</svg>`;
@@ -1343,13 +1431,13 @@ function avatarSvg(a = AV_DEFAULT, lvl = 1, px = 120) {
 const faceOf = (n, lvl = 1) => { const a = avatars[students[n]?.token]; return a ? `<span class="av-face sm">${avatarSvg(a, lvl, 40)}</span>` : `<span class="avatar" style="--h:${hue(n)}">${esc(n[0])}</span>`; };
 
 function renderAvatarTab(g) {
-  const a = meAv();
+  const a = meAv(), won = new Set(Object.values(meSpins).map(x => PRIZES[x.prize]?.item).filter(Boolean));
   $('#meAvatar').innerHTML = `<div class="av-stage"><div class="av-big">${avatarSvg(a, g.lvl, 170)}</div>
       <div><h3>${esc(me.name)}</h3><p class="muted">Рівень ${g.lvl} · ${rank(g.lvl)}</p>
-      <p class="muted small">Нові речі відкриваються з рівнями. Ходи на уроки, здавай ДЗ і збирай медалі!</p></div></div>
+      <p class="muted small">Нові речі відкриваються з рівнями, а речі з 🎡 — лише в колесі фортуни. Ходи на уроки, здавай ДЗ і збирай медалі!</p></div></div>
     ${Object.entries(AV).map(([k, opts]) => `<p class="label lbl-gap">${AV_LABEL[k]}</p><div class="av-opts">${opts.map(([v, name, need]) => {
-      const lock = g.lvl < need;
-      return `<button class="av-opt${a[k] === v ? ' on' : ''}" data-av="${k}" data-v="${v}"${lock ? ` disabled title="Відкриється на рівні ${need}"` : ''}>${k === 'color' ? `<i style="background:${v}"></i>` : esc(name)}${lock ? ` <small>🔒 ${need}</small>` : ''}</button>`;
+      const wheel = need === 'wheel', lock = wheel ? !won.has(v) : g.lvl < need;
+      return `<button class="av-opt${a[k] === v ? ' on' : ''}" data-av="${k}" data-v="${v}"${lock ? ` disabled title="${wheel ? 'Тільки з колеса фортуни' : 'Відкриється на рівні ' + need}"` : ''}>${k === 'color' ? `<i style="background:${v}"></i>` : esc(name)}${wheel ? ' <small>🎡</small>' : lock ? ` <small>🔒 ${need}</small>` : ''}</button>`;
     }).join('')}</div>`).join('')}`;
 }
 $('#meAvatar').onclick = e => {
@@ -1381,15 +1469,15 @@ $('#meLevel').onclick = e => {
 
 let spinning = false;
 $('#wheelDisc').innerHTML = (() => {
-  const n = PRIZES.length, col = ['#3D5AFE', '#9B5CFF', '#0FB48F', '#E0408A', '#FFB020', '#2F6BFF', '#12C2A0', '#7A4DFF'];
+  const n = WHEEL.length, col = ['#3D5AFE', '#9B5CFF', '#0FB48F', '#E0408A', '#FFB020', '#2F6BFF', '#12C2A0', '#7A4DFF', '#FF6B3D', '#E8B923'];
   const pt = (r, a) => `${(r * Math.cos(a)).toFixed(2)} ${(r * Math.sin(a)).toFixed(2)}`;
-  return `<svg viewBox="-100 -100 200 200">${PRIZES.map((p, i) => {
+  return `<svg viewBox="-100 -100 200 200">${WHEEL.map(pi => PRIZES[pi]).map((p, i) => {
     const a0 = i / n * 2 * Math.PI - Math.PI / 2, a1 = (i + 1) / n * 2 * Math.PI - Math.PI / 2, am = (a0 + a1) / 2, [x, y] = pt(64, am).split(' ');
     return `<path d="M0 0L${pt(96, a0)}A96 96 0 0 1 ${pt(96, a1)}Z" fill="${col[i]}"/>
       <text x="${x}" y="${y}" transform="rotate(${am * 180 / Math.PI + (Math.sin(am) > 0.01 ? 270 : 90)} ${x} ${y})" text-anchor="middle" dominant-baseline="central">${p.s}</text>`;
   }).join('')}<circle r="96" fill="none" stroke="#fff" stroke-width="4"/><circle r="15" fill="#fff"/></svg>`;
 })();
-const wheelAngle = i => 360 - (i + .5) * 360 / PRIZES.length; // сектор i під стрілкою зверху
+const wheelAngle = i => 360 - (Math.max(0, WHEEL.indexOf(i)) + .5) * 360 / WHEEL.length; // сектор призу i під стрілкою зверху
 function renderWheel() {
   if (spinning) return;
   const got = meSpins[weekKey()], today = tzParts(BASE_TZ, Date.now()).date;

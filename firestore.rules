@@ -46,7 +46,8 @@ service cloud.firestore {
           && (request.resource.data.get('kind', '') == '' ? request.resource.data.text.size() > 0 : request.resource.data.get('file', '').size() > 0)
           && request.resource.data.created == request.time
           && (request.resource.data.by == 'student' || (request.resource.data.by == 'teacher' && isTeacher()));
-        allow delete: if isTeacher();
+        // скасувати повідомлення: учень — свої, викладач — будь-які
+        allow delete: if isTeacher() || resource.data.by == 'student';
       }
       // Дані вкладень чату (фото, файли, голосові) — окремо, щоб список повідомлень був легким
       match /msgData/{id} {
@@ -54,7 +55,7 @@ service cloud.firestore {
         allow create: if exists(/databases/$(db)/documents/public/$(token))
           && request.resource.data.keys().hasOnly(['data'])
           && request.resource.data.data is string && request.resource.data.data.size() < 900000;
-        allow delete: if isTeacher();
+        allow delete: if isTeacher() || exists(/databases/$(db)/documents/public/$(token));
       }
       // Сповіщення учню пише лише викладач
       match /notifs/{id} {
@@ -88,7 +89,7 @@ service cloud.firestore {
         allow create: if exists(/databases/$(db)/documents/public/$(token))
           && week.size() == 10
           && request.resource.data.keys().hasOnly(['prize', 'created'])
-          && request.resource.data.prize is int && request.resource.data.prize >= 0 && request.resource.data.prize < 8
+          && request.resource.data.prize is int && request.resource.data.prize >= 0 && request.resource.data.prize < 16
           && request.resource.data.created == request.time;
         allow delete: if isTeacher();
       }
@@ -149,12 +150,13 @@ service cloud.firestore {
     }
     // Заявки на вільні вікна: створити може будь-хто, бачить лише викладач
     match /requests/{id} {
-      allow create: if request.resource.data.keys().hasOnly(['date', 'hour', 'name', 'note', 'type', 'created'])
+      allow create: if request.resource.data.keys().hasOnly(['date', 'hour', 'name', 'note', 'contact', 'type', 'created'])
         && request.resource.data.date is string && request.resource.data.date.size() == 10
         && request.resource.data.hour is int
         && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60
         && request.resource.data.note is string && request.resource.data.note.size() <= 300
-        && request.resource.data.type in ['regular', 'once'];
+        && request.resource.data.get('contact', '') is string && request.resource.data.get('contact', '').size() <= 100
+        && request.resource.data.type in ['regular', 'once', 'trial'];
       allow read, update, delete: if isTeacher();
     }
     // Учні, абонементи, відвідуваність, оплати, нотатки — тільки викладач

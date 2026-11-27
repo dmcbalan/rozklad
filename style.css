@@ -147,6 +147,10 @@ button.slot:disabled:hover { background: none; }
 .k-makeup  { --k: var(--acc2); }
 .k-extra   { --k: var(--pink); }
 .k-moved   { --k: var(--mint); }
+.k-trial   { --k: #F59E0B; }
+.k-busy    { --k: var(--mute); }
+.chip.k-busy { color: var(--mute); background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--mute) 14%, var(--surf)) 0 6px, var(--surf) 6px 12px); }
+.trial-btn { background: linear-gradient(120deg, #FFB020, #FF6B3D); color: #fff; box-shadow: none; }
 .k-off, .chip.off { --k: color-mix(in srgb, var(--mute) 45%, var(--surf)); }
 .chip {
   display: block; width: 100%; padding: 7px 8px; border-radius: 10px; text-align: center;
@@ -443,35 +447,77 @@ dialog.wide { width: min(760px, calc(100vw - 32px)); }
 .hw-item p { margin: 0 0 4px; }
 
 /* ---------- Чат ---------- */
-.chat-msgs { display: flex; flex-direction: column; gap: 6px; height: min(55vh, 460px); overflow-y: auto; padding: 14px; background: var(--bg); border-radius: 18px; }
-.chat-msgs .empty { margin: auto; text-align: center; }
-.msg { align-self: flex-start; max-width: 78%; padding: 8px 12px; border-radius: 16px 16px 16px 4px; background: var(--surf); box-shadow: inset 0 0 0 1px var(--line); white-space: pre-wrap; overflow-wrap: anywhere; }
-.msg.mine { align-self: flex-end; border-radius: 16px 16px 4px 16px; background: linear-gradient(120deg, var(--acc), var(--acc2)); color: #fff; box-shadow: none; }
-.msg small { display: block; font-size: 11px; opacity: .7; text-align: right; }
-.chat-day { align-self: center; margin: 6px 0 2px; font-size: 12px; font-weight: 600; color: var(--mute); }
+/* Вигляд як у Telegram: візерунок на фоні, бульбашки з хвостиком, час усередині, поле-«таблетка» */
+.chat-msgs { display: flex; flex-direction: column; gap: 4px; height: min(55vh, 460px); overflow-y: auto; padding: 14px 16px; border-radius: 18px;
+  background: radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--ink) 9%, transparent) 1px, transparent 1.5px) 0 0 / 22px 22px,
+    linear-gradient(160deg, color-mix(in srgb, var(--acc) 12%, var(--bg)), var(--bg) 55%, color-mix(in srgb, var(--mint) 9%, var(--bg))); }
+.chat-msgs .empty { margin: auto; padding: 8px 14px; border-radius: 14px; text-align: center; background: color-mix(in srgb, var(--surf) 80%, transparent); }
+.msg { position: relative; align-self: flex-start; max-width: 78%; padding: 6px 10px 7px 12px; border-radius: 18px 18px 18px 4px; background: var(--surf);
+  box-shadow: 0 1px 1px rgb(0 0 0 / .12); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.35; }
+.msg.mine { align-self: flex-end; border-radius: 18px 18px 4px 18px; background: linear-gradient(120deg, var(--acc), var(--acc2)); color: #fff; }
+.msg::before { content: ''; position: absolute; bottom: 0; left: -7px; width: 9px; height: 12px; background: radial-gradient(circle at 0 0, transparent 8.5px, var(--surf) 9px); }
+.msg.mine::before { left: auto; right: -7px; background: radial-gradient(circle at 100% 0, transparent 8.5px, var(--acc2) 9px); }
+.msg::after { content: ''; display: block; clear: both; }
+.msg small { float: right; position: relative; top: 7px; margin-left: 10px; font-size: 11px; line-height: 1; opacity: .65; }
+.chat-day { align-self: center; margin: 8px 0 4px; padding: 4px 11px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--ink);
+  background: color-mix(in srgb, var(--surf) 75%, transparent); backdrop-filter: blur(6px); }
+.msg-img { display: block; width: min(260px, 62vw); height: auto; max-height: 320px; object-fit: cover; border-radius: 12px; margin: 2px 0 4px; } /* фіксована ширина — інакше бульбашка розтягується під справжній розмір фото */
+.msg-wait { width: 200px; max-width: 100%; aspect-ratio: 4/3; height: auto; margin-bottom: 4px; }
+.msg audio { display: block; width: 240px; max-width: 100%; height: 40px; margin: 2px 0 4px; }
+.msg-del { position: absolute; top: 50%; left: -32px; translate: 0 -50%; width: 24px; height: 24px; border: 0; border-radius: 50%; background: var(--surf); color: var(--mute); box-shadow: inset 0 0 0 1px var(--line); font-size: 11px; opacity: 0; transition: opacity .15s; cursor: pointer; }
+.msg:hover .msg-del, .msg-del:focus-visible { opacity: 1; }
+.msg-del:hover { color: var(--bad); }
+/* телефон: ✕ з'являється після натискання на своє повідомлення */
+@media (hover: none) { .msg-del { pointer-events: none; } .msg.sel .msg-del { opacity: 1; pointer-events: auto; } }
+.msg-file { display: inline-block; margin-bottom: 4px; color: inherit; font-weight: 600; text-decoration: underline; }
+
 .chat-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-top: 10px; }
-.chat-form .ic { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 50%; background: var(--surf); box-shadow: inset 0 0 0 2px var(--line); font-size: 18px; cursor: pointer; }
-.chat-form .ic:hover { box-shadow: inset 0 0 0 2px var(--acc); }
-.chat-form .ic.rec { width: auto; padding: 0 12px; border-radius: 20px; font-size: 14px; font-weight: 600; color: #fff; background: #E5484D; box-shadow: none; animation: shimmer 1s ease-in-out infinite alternate; }
-.chat-form .att { flex-basis: 100%; display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 14px; background: var(--bg); position: relative; }
+.chat-form [hidden] { display: none !important; }
+.composer { flex: 1; min-width: 0; display: flex; align-items: flex-end; padding: 4px; border-radius: 24px; background: var(--surf); box-shadow: inset 0 0 0 1px var(--line); }
+.composer:focus-within { box-shadow: inset 0 0 0 1.5px var(--acc); }
+.composer textarea { flex: 1; min-width: 0; height: 40px; max-height: 140px; padding: 10px 4px; border: 0; background: none; resize: none; color: var(--ink); font: inherit; font-size: 15px; line-height: 1.35; }
+.composer textarea:focus { outline: 0; }
+.composer textarea::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-form .ic { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border: 0; border-radius: 50%; background: none; color: var(--mute); cursor: pointer; }
+.chat-form .ic:hover { color: var(--acc); }
+.chat-form .ic svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.chat-form .act, .chat-form > .btn.send { width: 48px; height: 48px; padding: 0; border-radius: 50%; color: #fff; background: linear-gradient(120deg, var(--acc), var(--acc2)); box-shadow: 0 6px 16px color-mix(in srgb, var(--acc) 35%, transparent); }
+.chat-form .act:hover { color: #fff; }
+.chat-form > .btn.send { display: grid; place-items: center; font-size: 0; }
+.chat-form > .btn.send::after { content: '➤'; font-size: 20px; }
+/* Telegram: мікрофон, поки поле порожнє; стрілка — коли є текст або вкладення (під час запису лишається таймер) */
+.chat-form:has(textarea:placeholder-shown):not(:has(.att:not([hidden]))) > .send { display: none; }
+.chat-form:not(:has(textarea:placeholder-shown)) > [data-voice]:not(.rec), .chat-form:has(.att:not([hidden])) > [data-voice]:not(.rec) { display: none; }
+.chat-form .ic.rec { width: auto; padding: 0 16px; border-radius: 24px; font-size: 14px; font-weight: 700; color: #fff; background: #E5484D; box-shadow: none; animation: shimmer 1s ease-in-out infinite alternate; }
+.chat-form .cancel { width: 48px; height: 48px; color: var(--bad); background: var(--surf); box-shadow: inset 0 0 0 1px var(--line); }
+.chat-form .att { flex-basis: 100%; display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 14px; background: var(--surf); border-left: 3px solid var(--acc); }
 .chat-form .att img { width: 48px; height: 48px; object-fit: cover; border-radius: 10px; }
 .chat-form .att span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
 .chat-form .att .x { position: static; }
-.msg-img { display: block; max-width: min(260px, 100%); max-height: 320px; border-radius: 12px; margin: 2px 0 4px; }
-.msg-wait { width: 200px; max-width: 100%; aspect-ratio: 4/3; height: auto; margin-bottom: 4px; }
-.msg audio { display: block; width: 240px; max-width: 100%; height: 40px; margin: 2px 0 4px; }
-.msg-file { display: inline-block; margin-bottom: 4px; color: inherit; font-weight: 600; text-decoration: underline; }
 /* Мова сайту */
 .lang { position: relative; display: grid; place-items: center; height: 38px; min-width: 44px; padding: 0 10px; border-radius: 19px; box-shadow: inset 0 0 0 2px var(--line); background: var(--surf); font-size: 13px; font-weight: 700; cursor: pointer; }
 .lang:hover, .lang:focus-within { box-shadow: inset 0 0 0 2px var(--acc); color: var(--acc); }
 .hdr-in .btn { white-space: nowrap; }
+.site-link svg { display: none; width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+/* жоден елемент не розширює сторінку — без «гойдання» вбік при свайпі (clip не ламає sticky) */
+html, body { overflow-x: clip; }
+@media (max-width: 760px) {
+  .hdr-in { gap: 6px; min-height: 58px; }
+  .logo { gap: .45rem; font-size: .92rem; }
+  .lm { width: 2.1rem; height: 2.1rem; }
+  .hdr-in .round, .lang { height: 36px; }
+  .hdr-in .round { width: 36px; }
+  .lang { min-width: 40px; padding: 0 8px; }
+  .hdr-in .site-link { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border-radius: 50%; }
+  .site-link svg { display: block; }
+  .site-link span { display: none; }
+}
+@media (max-width: 360px) { .lw { display: none; } }
 .lang select { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; font-size: 16px; }
 /* ховаємо панель Google Translate, переклад лишається */
 body { top: 0 !important; }
 .skiptranslate iframe, #goog-gt-tt, .goog-te-balloon-frame { display: none !important; }
 font[style] { background: none !important; box-shadow: none !important; }
-.chat-form textarea { flex: 1; min-width: 0; resize: vertical; max-height: 160px; border: 0; box-shadow: inset 0 0 0 2px var(--line); border-radius: 18px; padding: 10px 14px; background: var(--surf); color: var(--ink); }
-.chat-form textarea:focus { outline: 0; box-shadow: inset 0 0 0 2px var(--acc); }
 .chats { display: grid; grid-template-columns: 260px 1fr; gap: 16px; }
 .chat-box { min-width: 0; }
 .chat-list { display: flex; flex-direction: column; gap: 4px; max-height: 560px; overflow-y: auto; }
@@ -539,8 +585,7 @@ font[style] { background: none !important; box-shadow: none !important; }
   [data-view="chat"] :is(#meHi, #me .tabs) { display: none; }
   [data-view="chat"] #me { padding: 12px; }
   [data-view="chat"] .chat-msgs { height: calc(100dvh - 250px - env(safe-area-inset-bottom, 0px)); }
-  .chat-form > .btn { width: 44px; height: 40px; padding: 0; font-size: 0; }
-  .chat-form > .btn::after { content: '➤'; font-size: 18px; }
+  .trial-btn { flex: 1 1 100%; }
   [data-view="chat"] .tab:has(.att:not([hidden])) .chat-msgs { height: calc(100dvh - 318px - env(safe-area-inset-bottom, 0px)); }
   #me .tabs [data-tab="me-chat"] { display: none; }
 }
