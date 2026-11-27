@@ -159,6 +159,8 @@ let subs = {}, spins = {}, avatars = {}, meSubs = {}, meSpins = {}, meNotifs = {
 let ratings = {}, meRatings = {}, folio = null, folioWorks = {};
 // Відгуки на лендингу (reviews/): 5★ з коментарем копіюються туди автоматично, сховати можна в «Статистиці»
 let reviewsPub = null;
+// Вікова група учня → сторінка лендингу: /dlya-ditey/, /dlya-pidlitkiv/, /dlya-doroslykh/
+const AUDS = [['', '👤 Вік: ?'], ['kids', '🧒 Діти'], ['teens', '🧑‍🎓 Підлітки'], ['adults', '🧑‍💼 Дорослі']];
 // Хто з учнів зараз у кабінеті: токен → час останнього «я тут» (кабінет пише раз на хвилину)
 let presence = {};
 const ONLINE_MS = 150000;
@@ -771,6 +773,7 @@ function renderStudents(recs, rem) {
           ? `<a class="ghost link-btn" href="?s=${esc(st.token)}" target="_blank" rel="noopener" title="Відкрити особисту сторінку учня">Кабінет ↗</a>
              <button class="ghost link-btn" data-link="${esc(n)}" title="Скопіювати посилання для учня">🔗 Копіювати</button>`
           : `<button class="ghost link-btn" data-link="${esc(n)}" title="Створити особисту сторінку й скопіювати посилання">+ Кабінет учня</button>`}
+        <label class="aud-sel" title="На яку сторінку balanstudy.com.ua йдуть відгуки учня"><select data-aud="${esc(n)}" aria-label="Вікова група">${AUDS.map(([v, t]) => `<option value="${v}"${(st.aud || '') === v ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
         <button class="ghost link-btn" data-folio="${esc(n)}" title="Публічна сторінка з роботами, медалями й сертифікатами — для батьків">🌐 ${st.pid ? 'Портфоліо' : '+ Портфоліо'}</button>
         <form class="topup" data-name="${esc(n)}">
           <input name="n" type="number" min="-200" max="200" placeholder="уроків" aria-label="Уроків">
@@ -1390,6 +1393,10 @@ function pay(name, n, sum) {
   run(bt.commit().then(() => toast(`${name}: ${n > 0 ? '+' : ''}${n} уроків${sum ? ', ' + money(sum) : ''}`)));
 }
 
+$('#students').addEventListener('change', e => {
+  const s = e.target.closest('[data-aud]');
+  if (s) run(F.setDoc(F.doc(db, 'students', s.dataset.aud), { aud: s.value }, { merge: true }).then(() => toast(s.value ? 'Відгуки учня підуть і на сторінку «' + AUDS.find(a => a[0] === s.value)[1].slice(3) + '»' : 'Вікову групу прибрано')));
+});
 $('#students').onsubmit = e => {
   e.preventDefault();
   const f = e.target;
@@ -1931,8 +1938,8 @@ function syncReviews() {
   for (const x of Object.values(ratings)) {
     if (!revOk(x) || !students[nameByToken(x.token)]) continue;
     const id = revId(x), cur = reviewsPub[id] || {};
-    const data = { name: nameByToken(x.token).split(' ')[0], text: x.comment.trim().slice(0, 300), date: x.date, stars: 5 };
-    if (cur.name === data.name && cur.text === data.text && cur.date === data.date) continue;
+    const data = { name: nameByToken(x.token).split(' ')[0], text: x.comment.trim().slice(0, 300), date: x.date, stars: 5, aud: students[nameByToken(x.token)].aud || '' };
+    if (cur.name === data.name && cur.text === data.text && cur.date === data.date && (cur.aud || '') === data.aud) continue;
     reviewsPub[id] = { ...cur, ...data };
     run(F.setDoc(F.doc(db, 'reviews', id), data, { merge: true }));
   }
