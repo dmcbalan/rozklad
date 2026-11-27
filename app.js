@@ -2293,7 +2293,7 @@ console.assert(CONTEST_IDEAS.every(x => x.t.length <= 80 && x.d.length <= 800), 
 function renderContestAdmin() {
   const m = contestMonth, c = contest[m], el = $('#contestAdmin'), list = contestList();
   const html = `<h4 class="sep">🏆 Челендж місяця</h4>
-    <form class="contest-form"><label class="fl">Місяць<input type="month" name="m" value="${m}"></label>
+    <form class="contest-form"><label class="fl">Місяць<select name="m">${[...new Set([m, ...[-1, 0, 1, 2, 3].map(n => shiftMonth(monthKey(), n))])].sort().map(k => `<option value="${k}"${k === m ? ' selected' : ''}>${monthName(k)}</option>`).join('')}</select></label>
       <label class="fl">Готова тема для всіх курсів<select name="preset"><option value="">— обрати, і поля заповняться —</option>${CONTEST_IDEAS.map((x, i) => `<option value="${i}">${esc(x.t)}</option>`).join('')}</select></label>
       <label class="fl">Тема<input name="title" maxlength="80" value="${esc(c?.title || '')}" placeholder="Напр.: Зроби гру про зиму" required></label>
       <label class="fl">Опис (необов'язково)<textarea name="desc" maxlength="800" rows="6" placeholder="Що зробити, до якого числа">${esc(c?.desc || '')}</textarea></label>
