@@ -156,6 +156,8 @@ let lessons = {}, changes = {}, students = {}, attendance = {}, payments = {}, r
 let subs = {}, spins = {}, avatars = {}, meSubs = {}, meSpins = {}, meNotifs = {}, meAvatar = {};
 // Відгуки про уроки (ratings) і публічне портфоліо (?p=код портфоліо, окремий від коду кабінету)
 let ratings = {}, meRatings = {}, folio = null, folioWorks = {};
+// Відгуки на лендингу (reviews/): 5★ з коментарем копіюються туди автоматично, сховати можна в «Статистиці»
+let reviewsPub = null;
 // Хто з учнів зараз у кабінеті: токен → час останнього «я тут» (кабінет пише раз на хвилину)
 let presence = {};
 const ONLINE_MS = 150000;
@@ -672,6 +674,7 @@ function renderTeacher() {
   renderChats();
   renderSubs();
   renderNewRevs();
+  syncReviews();
   if ($('#awardDlg').open) openAwards($('#awardDlg').dataset.name);
   syncPublic(recs, rem);
 }
@@ -1883,12 +1886,28 @@ $('#newRevs').onclick = e => {
   try { localStorage.setItem('rozklad-rev-seen', Math.max(...Object.values(ratings).map(x => ms(x.created)), Date.now())); } catch {}
   render();
 };
+const REVIEW_MIN = 10; // коротші коментарі («ок», «супер») на сайт не йдуть
+const revId = x => refCode(x.token) + '_' + x.id; // без коду кабінету в id
+const revOk = x => x.stars === 5 && (x.comment || '').trim().length >= REVIEW_MIN;
+function syncReviews() {
+  if (!reviewsPub) return; // чекаємо, поки завантажиться reviews/, щоб не перезаписувати зайве
+  for (const x of Object.values(ratings)) {
+    if (!revOk(x) || !students[nameByToken(x.token)]) continue;
+    const id = revId(x), cur = reviewsPub[id] || {};
+    const data = { name: nameByToken(x.token).split(' ')[0], text: x.comment.trim().slice(0, 300), date: x.date, stars: 5 };
+    if (cur.name === data.name && cur.text === data.text && cur.date === data.date) continue;
+    reviewsPub[id] = { ...cur, ...data };
+    run(F.setDoc(F.doc(db, 'reviews', id), data, { merge: true }));
+  }
+}
 function reviewsHtml() {
   const all = Object.values(ratings).sort((a, b) => b.date.localeCompare(a.date) || ms(b.created) - ms(a.created)), a = avgRating(all);
   if (!all.length) return '<h4 class="sep">Відгуки учнів</h4><p class="empty">Ще немає відгуків. Учні оцінюють урок у кабінеті після відмітки «Був».</p>';
   return `<h4 class="sep">Відгуки учнів · загалом ★ ${a.rate.toFixed(1)} (${a.rated})</h4>
     <div class="reviews">${all.slice(0, 8).map(x => `<div class="rev">${starsHtml(x.stars)}
-      <b>${esc(nameByToken(x.token))}</b> <small class="muted">урок ${shortDay(x.date)}</small>${x.comment ? `<p>${esc(x.comment)}</p>` : ''}</div>`).join('')}</div>`;
+      <b>${esc(nameByToken(x.token))}</b> <small class="muted">урок ${shortDay(x.date)}</small>${x.comment ? `<p>${esc(x.comment)}</p>` : ''}
+      ${revOk(x) && reviewsPub ? `<button class="ghost link-btn${reviewsPub[revId(x)]?.hidden ? '' : ' has'}" data-revhide="${esc(revId(x))}">${reviewsPub[revId(x)]?.hidden ? '🙈 Сховано з сайту · показати' : '🌐 На сайті · сховати'}</button>` : ''}</div>`).join('')}</div>
+    <p class="muted small">Оцінки 5★ з коментарем від ${REVIEW_MIN} символів автоматично з'являються в розділі відгуків на balanstudy.com.ua (лише ім'я).</p>`;
 }
 // Картка оцінки перемальовується лише коли змінюється урок — щоб не стерти обрані зірки й текст
 // Урок, який можна оцінити: щойно минув за розкладом (останні 3 дні) або відмічений «Був» за 7 днів; пропущені — ні
@@ -2347,6 +2366,13 @@ const toggleSnow = () => { try { localStorage.setItem('rozklad-snow', snowOn() ?
 $('#snowBtn').onclick = toggleSnow;
 snow();
 
+$('#tab-stats').addEventListener('click', e => {
+  const b = e.target.closest('[data-revhide]');
+  if (!b || !reviewsPub) return;
+  const id = b.dataset.revhide, hidden = !reviewsPub[id]?.hidden;
+  run(F.setDoc(F.doc(db, 'reviews', id), { hidden }, { merge: true }).then(() => toast(hidden ? 'Відгук сховано з сайту' : 'Відгук знову на сайті')));
+});
+
 // ---------- PWA ----------
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js');
 let installEvt;
@@ -2483,6 +2509,7 @@ if (!configured) {
               if (name === 'avatar') avatars = Object.fromEntries(Object.values(m).map(x => [x.token, x]));
               render();
             }, e => toast(e.message))),
+            F.onSnapshot(F.collection(db, 'reviews'), s => { reviewsPub = {}; s.forEach(d => reviewsPub[d.id] = d.data()); render(); }, e => toast(e.message)),
             F.onSnapshot(F.collectionGroup(db, 'messages'), s => {
               msgs = {}; s.forEach(d => msgs[d.id] = { ...d.data({ serverTimestamps: 'estimate' }), token: d.ref.parent.parent.id }); render();
             }, e => toast(e.message)),

@@ -180,6 +180,11 @@ service cloud.firestore {
         }
       }
     }
+    // Відгуки для лендингу balanstudy.com.ua: читає будь-хто, пише лише викладач (копія 5★ з коментарем)
+    match /reviews/{id} {
+      allow read: if true;
+      allow write: if isTeacher();
+    }
     // Заявки на вільні вікна: створити може будь-хто, бачить лише викладач
     match /requests/{id} {
       allow create: if request.resource.data.keys().hasOnly(['date', 'hour', 'name', 'note', 'contact', 'ref', 'type', 'created'])
