@@ -1017,3 +1017,23 @@ body:has(.chats.open) { overflow: hidden; }
   .chat-search { margin: 0 0 8px; }
   .chats .chat-list { padding: 0; }
 }
+
+/* ---------- Звіт для батьків (?p=…&r=РРРР-ММ) ---------- */
+.rep-quote { position: relative; margin: 24px 0 0; padding: 22px 24px 20px 64px; border-radius: var(--r); background: color-mix(in srgb, var(--acc) 9%, var(--surf)); box-shadow: inset 0 0 0 1px var(--line); }
+.rep-quote::before { content: '\201C'; position: absolute; left: 18px; top: 10px; font: 700 64px/1 Unbounded, Onest, sans-serif; color: var(--acc); }
+.rep-quote p { margin: 0; font-size: 18px; line-height: 1.55; white-space: pre-wrap; }
+.rep-quote span { display: block; margin-top: 12px; font-size: 14px; font-weight: 600; color: var(--mute); }
+.rep-topics { list-style: none; margin: 0; padding: 4px 0 4px 24px; border-left: 2px solid color-mix(in srgb, var(--acc) 35%, transparent); display: flex; flex-direction: column; gap: 16px; max-width: 720px; }
+.rep-topics li { position: relative; }
+.rep-topics li::before { content: ''; position: absolute; left: -31px; top: 4px; width: 12px; height: 12px; border-radius: 50%; background: linear-gradient(120deg, var(--acc), var(--mint)); box-shadow: 0 0 0 4px var(--bg); }
+.rep-topics time { display: block; font-size: 13px; color: var(--mute); }
+.rep-topics span { font-weight: 600; font-size: 17px; }
+.rep-more { margin-top: 32px; }
+.rep-mini { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; }
+.rep-mini span { padding: 4px 10px; border-radius: 999px; background: var(--bg); font-size: 13px; }
+#meReport .rep-link { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--acc) 45%, transparent); }
+@media (max-width: 760px) {
+  .rep-quote { padding: 18px 16px 16px 48px; }
+  .rep-quote::before { left: 12px; font-size: 48px; }
+  .rep-quote p { font-size: 16px; }
+}

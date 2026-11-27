@@ -380,6 +380,7 @@ function renderMe() {
   $('#forget').onclick = forget;
   renderMeChat();
   renderAwards(g);
+  renderMeReport();
   renderAvatarTab(g);
   renderFriends();
   renderContestMe();
@@ -761,7 +762,7 @@ function renderStudents(recs, rem) {
       <div class="stu-actions">
         <div class="packs">${PACKS.map((p, i) => `<button class="pack" data-pack="${i}" data-name="${esc(n)}"><b>+${p.n}</b> ${money(p.sum)}</button>`).join('')}</div>
         ${r <= 3 && (st.paid || 0) > 0 ? `<button class="ghost link-btn warnbtn" data-msg="remind" data-name="${esc(n)}">💬 Нагадування</button>` : ''}
-        <button class="ghost link-btn" data-msg="report" data-name="${esc(n)}">📊 Звіт</button>
+        <button class="ghost link-btn" data-report="${esc(n)}" title="Сторінка-звіт за місяць для батьків">📊 Звіт</button>
         <button class="ghost link-btn" data-awards="${esc(n)}">🏅 Медалі</button>
         <button class="ghost link-btn" data-cert="${esc(n)}">🎓 Сертифікат${(st.certs || []).length ? ` · ${st.certs.length}` : ''}</button>
         ${st.token ? `<button class="ghost link-btn" data-chatwith="${esc(n)}">💬 Чат</button>` : ''}
@@ -949,8 +950,8 @@ function msgRemind(n) {
     PACKS.filter(p => p.n > 1).map(p => `• ${p.n} занять — ${money(p.sum)} (${money(p.sum / p.n)} за заняття)`).join('\n') +
     `\nДякую! 🙌`;
 }
-function msgReport(n) {
-  const m = iso(new Date()).slice(0, 7), recs = recordsBy()[n] || [];
+function msgReport(n, m = iso(new Date()).slice(0, 7)) {
+  const recs = recordsBy()[n] || [];
   const at = recs.filter(x => x.date.startsWith(m));
   const held = at.filter(x => x.status === 'present').length, abs = at.filter(x => x.status === 'absent').length;
   const topics = notesOf(n).filter(x => x.date.startsWith(m) && x.topic).reverse().map(x => `• ${x.topic}`);
@@ -978,7 +979,7 @@ function syncPublic(recs, rem) {
     const data = { name: n, paid: st.paid || 0, remaining: rem(n),
       history: (recs[n] || []).slice(0, 30).map(x => ({ id: x.id, date: x.date, hour: x.hour ?? null, status: x.status, kind: x.kind || 'regular' })),
       notes: notesOf(n).slice(0, 20).map(x => ({ date: x.date, topic: x.topic || '', homework: x.homework || '' })),
-      streak: pr.streak, present: pr.present, best: pr.best, badges: st.badges || [], certs: st.certs || [], pid: st.pid || '', refPaid: st.refPaid || 0 };
+      streak: pr.streak, present: pr.present, best: pr.best, badges: st.badges || [], certs: st.certs || [], pid: st.pid || '', refPaid: st.refPaid || 0, reports: Object.keys(st.reports || {}).sort().slice(-3) };
     const json = JSON.stringify(data);
     if (synced[st.token] === json) continue;
     synced[st.token] = json;
@@ -1411,6 +1412,8 @@ $('#students').onclick = async e => {
     const n = msg.dataset.name;
     return copyText(msg.dataset.msg === 'remind' ? msgRemind(n) : msgReport(n), `Повідомлення для ${n} скопійовано — встав у Telegram/Viber`);
   }
+  const rep = e.target.closest('[data-report]');
+  if (rep) return openReport(rep.dataset.report);
   const rp = e.target.closest('[data-refpay]');
   if (rp) return run(F.setDoc(F.doc(db, 'students', rp.dataset.refpay), { refPaid: F.increment(+rp.dataset.sum) }, { merge: true })
     .then(() => toast(`Виплату ${money(+rp.dataset.sum)} записано`)));
@@ -1817,7 +1820,7 @@ function notifyStudent(n, type, text) {
   const tok = students[n]?.token;
   if (tok) run(F.addDoc(F.collection(db, 'public', tok, 'notifs'), { type, text: text.slice(0, 300), created: F.serverTimestamp() }));
 }
-const N_ICON = { hw: '📚', badge: '🏅', review: '📝', cert: '🎓', contest: '🏆' }, N_GO = { hw: 'me-hw', badge: 'me-awards', review: 'me-hw', cert: 'me-awards', contest: 'me-home' };
+const N_ICON = { hw: '📚', badge: '🏅', review: '📝', cert: '🎓', contest: '🏆', report: '📊' }, N_GO = { hw: 'me-hw', badge: 'me-awards', review: 'me-hw', cert: 'me-awards', contest: 'me-home', report: 'me-home' };
 function feed() {
   const out = [];
   if (me) {
@@ -2056,7 +2059,8 @@ async function ensurePid(n) {
 function syncFolio(n, st, recs) {
   const g = growthOf(n, recs), all = recs[n] || [], av = avatars[st.token];
   const data = { name: n, lvl: g.lvl, xp: g.xp, medals: g.medals, certs: st.certs || [], lessons: progress(all).present, since: all.length ? all.at(-1).date : '',
-    avatar: av ? Object.fromEntries(Object.keys(AV_DEFAULT).map(k => [k, av[k] || AV_DEFAULT[k]])) : null, ref: st.token ? refCode(st.token) : '' };
+    avatar: av ? Object.fromEntries(Object.keys(AV_DEFAULT).map(k => [k, av[k] || AV_DEFAULT[k]])) : null, ref: st.token ? refCode(st.token) : '',
+    months: Object.fromEntries(reportMonths(st).map(m => [m, monthReport(n, st, recs, m)])) };
   const json = JSON.stringify(data);
   if (synced['p' + st.pid] === json) return;
   synced['p' + st.pid] = json;
@@ -2079,9 +2083,9 @@ async function togglePub(n, id, tok) {
     toast('Робота в портфоліо 🌐');
   } catch (e) { toast(errText(e)); }
 }
-function shareFolio(url, name) {
-  if (navigator.share) return navigator.share({ title: `${name} — портфоліо | Balan Study`, url }).catch(() => {});
-  copyText(url, 'Посилання на портфоліо скопійовано');
+function shareFolio(url, name, what = 'портфоліо') {
+  if (navigator.share) return navigator.share({ title: `${name} — ${what} | Balan Study`, url }).catch(() => {});
+  copyText(url, `Посилання на ${what} скопійовано`);
 }
 
 function renderFolio() {
@@ -2090,6 +2094,7 @@ function renderFolio() {
   box.hidden = false;
   if (folio === null) { box.innerHTML = `<p class="empty">${configured ? 'Завантаження портфоліо…' : 'Firebase не підключено'}</p>`; return; }
   if (!folio) { box.innerHTML = '<div class="folio-hero"><div><h1>Портфоліо не знайдено</h1><p class="lead">Перевір посилання або попроси нове у викладача.</p></div></div>'; return; }
+  if (reportId) return renderReport(box);
   const f = folio, certs = f.certs || [], medals = f.medals || [];
   const works = Object.entries(folioWorks).filter(([, w]) => typeof w.image === 'string' && w.image.startsWith('data:image/')).sort((a, b) => ms(b[1].created) - ms(a[1].created));
   document.title = `${f.name} — портфоліо | Balan Study`;
@@ -2112,6 +2117,9 @@ function renderFolio() {
     ${certs.length ? `<h2 class="fh">🎓 Сертифікати</h2><div class="folio-certs">${certs.map((c, i) => `<button class="folio-cert" data-fcert="${i}" aria-label="Сертифікат «${esc(c.course)}»">${certSvg(f.name, c)}</button>`).join('')}</div>` : ''}
     ${works.length ? `<h2 class="fh">🚀 Роботи</h2><div class="folio-works">${works.map(([, w]) => `<figure><a href="${w.image}" target="_blank"><img src="${w.image}" alt="${esc(w.caption || 'Робота')}" loading="lazy"></a>${w.caption ? `<figcaption>${esc(w.caption)}</figcaption>` : ''}</figure>`).join('')}</div>` : ''}
     ${medals.length ? `<h2 class="fh">🏅 Медалі</h2><div class="medals">${medals.map(b => medalHtml(b)).join('')}</div>` : ''}
+    ${folioCta(f)}`;
+}
+const folioCta = f => `
     <div class="folio-cta">
       <div><h2>Хочете, щоб ваша дитина теж створювала ігри, сайти й 3D-моделі?</h2>
       <p>Індивідуальні онлайн-заняття 1:1 з програмування, створення ігор, сайтів і відеомонтажу.</p></div>
@@ -2119,11 +2127,119 @@ function renderFolio() {
         <a class="btn ${f.ref ? 'ghost' : ''}" href="https://balanstudy.com.ua/" target="_blank" rel="noopener">Дізнатися про заняття</a></div>
       ${f.ref ? `<p class="small">Запис за запрошенням ${esc(f.name)} — ${giftText()}, якщо продовжите 🎁</p>` : ''}
     </div>`;
+
+// ---------- Звіт для батьків за місяць: ?p=код портфоліо&r=РРРР-ММ (дані рахує браузер викладача, як і портфоліо) ----------
+const reportId = (v => /^\d{4}-\d{2}$/.test(v || '') ? v : null)(new URLSearchParams(location.search).get('r'));
+const MONTH_IN = ['січні', 'лютому', 'березні', 'квітні', 'травні', 'червні', 'липні', 'серпні', 'вересні', 'жовтні', 'листопаді', 'грудні'];
+const monthIn = m => MONTH_IN[+m.slice(5, 7) - 1];
+const reportUrl = (pid, m) => `${folioUrl(pid)}&r=${m}`;
+// минулий і поточний місяць — завжди, плюс місяці, за які викладач зберіг звіт (до 6)
+const reportMonths = st => [...new Set([shiftMonth(monthKey(), -1), monthKey(), ...Object.keys(st.reports || {})])].sort().slice(-6);
+// рівень і медалі станом на початок дня `upto` (медалі без дати — ручні й сертифікати — рахуються як давні)
+function growthAt(n, recs, upto) {
+  const st = students[n] || {}, tok = st.token, t = parseIso(upto).getTime() - 12 * 3600e3, before = x => ms(x.created) < t;
+  const pr = progress((recs[n] || []).filter(x => x.date < upto));
+  return growth({ present: pr.present, best: pr.best, manual: st.badges || [], certs: st.certs || [],
+    subsList: tok ? Object.values(subs).filter(x => x.token === tok && before(x)) : [],
+    spinsList: tok ? Object.values(spins).filter(x => x.token === tok && before(x)) : [],
+    reviews: tok ? goodReviews(Object.values(ratings).filter(x => x.token === tok && x.date < upto)) : 0 });
 }
+function monthReport(n, st, recs, m) {
+  const start = m + '-01', end = shiftMonth(m, 1) + '-01', a = growthAt(n, recs, start), b = growthAt(n, recs, end);
+  return { lessons: (recs[n] || []).filter(x => x.date >= start && x.date < end && x.status === 'present').length,
+    topics: notesOf(n).filter(x => x.date >= start && x.date < end && x.topic).reverse().slice(0, 20).map(x => ({ date: x.date, topic: x.topic })),
+    hw: b.hwOk - a.hwOk, xp: b.xp - a.xp, lvl: b.lvl, medals: b.medals.filter(x => !a.medals.includes(x)), comment: st.reports?.[m] || '' };
+}
+console.assert(monthIn('2026-11') === 'листопаді' && monthIn('2026-02') === 'лютому', 'monthIn()');
+
+function renderReport(box) {
+  const f = folio, m = reportId, r = f.months?.[m];
+  if (!r) {
+    box.innerHTML = `<div class="folio-hero"><div><h1>Звіт ще не готовий</h1><p class="lead">Звіту за ${esc(monthName(m))} немає. А поки <a href="?p=${esc(folioId)}">відкрийте портфоліо</a>.</p></div></div>`;
+    return;
+  }
+  const t0 = parseIso(m + '-01').getTime() - 12 * 3600e3, t1 = parseIso(shiftMonth(m, 1) + '-01').getTime() - 12 * 3600e3;
+  const works = Object.values(folioWorks).filter(w => typeof w.image === 'string' && w.image.startsWith('data:image/') && ms(w.created) >= t0 && ms(w.created) < t1)
+    .sort((a, b) => ms(a.created) - ms(b.created));
+  const topics = r.topics || [], medals = r.medals || [], num = (v, one, few, many) => `<div><b>${v}</b><small>${plural(v, one, few, many)}</small></div>`;
+  document.title = `${f.name}: що вивчено в ${monthIn(m)} | Balan Study`;
+  box.innerHTML = `
+    <div class="folio-hero rep-hero">
+      <div class="av-big">${avatarSvg(f.avatar || AV_DEFAULT, r.lvl || f.lvl, 150)}</div>
+      <div>
+        <span class="badge">📊 Звіт за ${esc(monthName(m))}</span>
+        <h1>${esc(f.name)}</h1>
+        <p class="lead">Що вивчено в ${monthIn(m)} · рівень ${r.lvl || f.lvl}, ${rank(r.lvl || f.lvl)}</p>
+        <div class="nums">
+          ${num(r.lessons, 'заняття', 'заняття', 'занять')}
+          ${topics.length ? num(topics.length, 'нова тема', 'нові теми', 'нових тем') : ''}
+          ${r.hw > 0 ? num(r.hw, 'домашка', 'домашки', 'домашок') : ''}
+          ${medals.length ? num(medals.length, 'нова медаль', 'нові медалі', 'нових медалей') : ''}
+          ${r.xp > 0 ? `<div><b>+${r.xp}</b><small>XP</small></div>` : ''}
+        </div>
+        <button class="btn ghost sm" data-fshare>📤 Поділитися</button>
+      </div>
+    </div>
+    ${r.comment ? `<blockquote class="rep-quote"><p>${esc(r.comment)}</p><span>Дмитро Балан, викладач Balan Study</span></blockquote>` : ''}
+    ${topics.length ? `<h2 class="fh">📚 Що вивчили</h2><ol class="rep-topics">${topics.map(x => `<li><time>${longDate(x.date)}</time><span>${esc(x.topic)}</span></li>`).join('')}</ol>` : ''}
+    ${works.length ? `<h2 class="fh">🚀 Роботи місяця</h2><div class="folio-works">${works.map(w => `<figure><a href="${w.image}" target="_blank"><img src="${w.image}" alt="${esc(w.caption || 'Робота')}" loading="lazy"></a>${w.caption ? `<figcaption>${esc(w.caption)}</figcaption>` : ''}</figure>`).join('')}</div>` : ''}
+    ${medals.length ? `<h2 class="fh">🏅 Нові медалі</h2><div class="medals">${medals.map(b => medalHtml(b)).join('')}</div>` : ''}
+    ${!r.lessons && !topics.length && !works.length ? '<p class="empty">У цьому місяці занять ще не було.</p>' : ''}
+    <p class="rep-more"><a class="ghost link-btn" href="?p=${esc(folioId)}">🌐 Усе портфоліо: роботи, медалі, сертифікати →</a></p>
+    ${folioCta(f)}`;
+}
+
+// Вікно «Звіт» у картці учня (викладач)
+function openReport(n) {
+  const f = $('#repForm'), cur = monthKey(), prev = shiftMonth(cur, -1);
+  f.dataset.name = n;
+  $('#repTitle').textContent = `Звіт для батьків: ${n}`;
+  // на початку місяця логічніше звітувати за минулий
+  const pick = +tzParts(BASE_TZ, Date.now()).date.slice(8) <= 10 ? prev : cur;
+  f.elements['m'].innerHTML = [prev, cur].map(k => `<option value="${k}"${k === pick ? ' selected' : ''}>${monthName(k)}</option>`).join('');
+  fillReport();
+  $('#repDlg').showModal();
+}
+function fillReport() {
+  const f = $('#repForm'), n = f.dataset.name, m = f.elements['m'].value, st = students[n] || {}, r = monthReport(n, st, recordsBy(), m);
+  f.elements['comment'].value = st.reports?.[m] || '';
+  $('#repStats').innerHTML = `<span>✅ ${r.lessons} ${lessonsWord(r.lessons)}</span><span>📚 тем: ${r.topics.length}</span><span>📬 ДЗ: ${r.hw}</span>`
+    + `<span>🏅 нових медалей: ${r.medals.length}</span><span>⭐ +${r.xp} XP</span>`;
+}
+$('#repForm').elements['m'].onchange = fillReport;
+async function saveReport() {
+  const f = $('#repForm'), n = f.dataset.name, m = f.elements['m'].value, comment = f.elements['comment'].value.trim().slice(0, 1000);
+  const fresh = !(m in (students[n]?.reports || {}));
+  const pid = students[n]?.pid || await ensurePid(n);
+  await F.setDoc(F.doc(db, 'students', n), { reports: { [m]: comment } }, { merge: true });
+  if (fresh) notifyStudent(n, 'report', `Звіт за ${monthName(m)} готовий — покажи батькам!`);
+  return reportUrl(pid, m);
+}
+$('#repForm').onsubmit = async e => {
+  e.preventDefault();
+  try { const url = await saveReport(); $('#repDlg').close(); copyText(url, 'Посилання на звіт скопійовано — надішли батькам'); }
+  catch (err) { toast(errText(err)); }
+};
+$('#repForm').onclick = async e => {
+  if (e.target.closest('[data-reptext]')) { const f = $('#repForm'); return copyText(msgReport(f.dataset.name, f.elements['m'].value), 'Текст звіту скопійовано — встав у Telegram/Viber'); }
+  if (!e.target.closest('[data-repopen]')) return;
+  const w = open('', '_blank'); // вікно — одразу, поки браузер вважає це натисканням
+  try { const url = await saveReport(); if (w) w.location = url; else location.href = url; }
+  catch (err) { w?.close(); toast(errText(err)); }
+};
+
+// Кабінет: картка останнього звіту на «Огляді»
+function renderMeReport() {
+  const m = (me.reports || []).at(-1), box = $('#meReport'), show = !!(me.pid && m && m >= shiftMonth(monthKey(), -1));
+  box.hidden = !show;
+  box.innerHTML = show ? `<div class="folio-link rep-link"><span>📊</span><div><b>Звіт за ${esc(monthName(m))}</b><small class="muted">Що ти вивчив(ла) за місяць, медалі й відгук викладача — покажи батькам</small></div>
+    <a class="ghost link-btn" href="${esc(reportUrl(me.pid, m))}" target="_blank" rel="noopener">Відкрити</a><button class="btn sm" data-sharereport="${m}">Поділитися</button></div>` : '';
+}
+$('#meReport').onclick = e => { const b = e.target.closest('[data-sharereport]'); if (b) shareFolio(reportUrl(me.pid, b.dataset.sharereport), me.name, `звіт за ${monthName(b.dataset.sharereport)}`); };
 $('#folio').onclick = e => {
   const c = e.target.closest('[data-fcert]');
   if (c) return openCert(folio.name, folio.certs[+c.dataset.fcert]);
-  if (e.target.closest('[data-fshare]')) shareFolio(location.href, folio.name);
+  if (e.target.closest('[data-fshare]')) shareFolio(location.href, folio.name, reportId ? `звіт за ${monthName(reportId)}` : 'портфоліо');
 };
 
 // ---------- Челендж місяця: contest/{YYYY-MM} (тема), entries/{id фото} (робота), images/{id} (фото), entries/{id}/votes/{глядач} ----------

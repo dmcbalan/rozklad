@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=Unbounded:wght@500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1797100000">
+<link rel="stylesheet" href="style.css?v=1797200000">
 </head>
 <body>
 
@@ -64,7 +64,7 @@
       <button data-tab="me-avatar">Персонаж</button>
       <button data-tab="me-photos">Мої роботи</button>
     </div>
-    <div id="tab-me-home" class="tab"><div id="rateBox" class="rate" hidden></div><div id="contestMe" class="contest-me" hidden></div><button id="refTeaser" class="ref-teaser" data-gotab="me-friends"></button><div id="meMain"></div></div>
+    <div id="tab-me-home" class="tab"><div id="rateBox" class="rate" hidden></div><div id="meReport" hidden></div><div id="contestMe" class="contest-me" hidden></div><button id="refTeaser" class="ref-teaser" data-gotab="me-friends"></button><div id="meMain"></div></div>
     <div id="tab-me-friends" class="tab" hidden><div id="meFriends" class="ref"></div></div>
     <div id="tab-me-tree" class="tab" hidden><div id="meTree"></div></div>
     <div id="tab-me-chat" class="tab" hidden>
@@ -308,6 +308,22 @@
   <div id="awardGrid"></div>
 </dialog>
 
+<dialog id="repDlg">
+  <form id="repForm">
+    <button type="button" class="x" data-close aria-label="Закрити">✕</button>
+    <h3 id="repTitle">Звіт для батьків</h3>
+    <label class="fl">Місяць<select name="m"></select></label>
+    <div id="repStats" class="rep-mini"></div>
+    <label class="fl">Відгук викладача<textarea name="comment" rows="5" maxlength="1000" placeholder="Що вдалося цього місяця, за що похвалити, над чим працюємо далі"></textarea></label>
+    <div class="actions">
+      <button class="btn">🔗 Зберегти й скопіювати посилання</button>
+      <button type="button" class="ghost" data-repopen>Відкрити ↗</button>
+      <button type="button" class="ghost" data-reptext>Текстом для Telegram</button>
+    </div>
+    <p class="muted small">Сторінку бачить кожен, у кого є посилання: заняття, теми, ДЗ, нові медалі, роботи з портфоліо й ваш відгук. Пропусків і оплат там немає. Учень отримає сповіщення.</p>
+  </form>
+</dialog>
+
 <dialog id="certIssue">
   <form id="certForm">
     <button type="button" class="x" data-close aria-label="Закрити">✕</button>
@@ -369,7 +385,7 @@
 <div id="toast" role="status"></div>
 <canvas id="snow" aria-hidden="true" hidden></canvas>
 
-<script src="config.js?v=1797100000"></script>
-<script src="app.js?v=1797100000"></script>
+<script src="config.js?v=1797200000"></script>
+<script src="app.js?v=1797200000"></script>
 </body>
 </html>
