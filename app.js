@@ -2417,9 +2417,10 @@ $('#meTree').addEventListener('click', e => {
 });
 
 // ---------- Сніг (листопад–січень); вимикається в налаштуваннях і внизу сторінки ----------
-const snowOn = () => { try { return localStorage.getItem('rozklad-snow') !== '0'; } catch { return true; } };
+// Без вибору користувача поважаємо «Зменшити рух» (часто вмикає енергозбереження на телефоні); явне «увімкнути» — сильніше
+const snowOn = () => { let v = null; try { v = localStorage.getItem('rozklad-snow'); } catch {} return v ? v !== '0' : !matchMedia('(prefers-reduced-motion: reduce)').matches; };
 function snow() {
-  const cv = $('#snow'), on = isWinter() && snowOn() && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const cv = $('#snow'), on = isWinter() && snowOn();
   $('#snowBtn').hidden = !isWinter();
   $('#snowBtn').textContent = snowOn() ? '❄️ Вимкнути сніг' : '❄️ Увімкнути сніг';
   cv.hidden = !on;
