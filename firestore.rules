@@ -150,12 +150,14 @@ service cloud.firestore {
     }
     // Заявки на вільні вікна: створити може будь-хто, бачить лише викладач
     match /requests/{id} {
-      allow create: if request.resource.data.keys().hasOnly(['date', 'hour', 'name', 'note', 'contact', 'type', 'created'])
+      allow create: if request.resource.data.keys().hasOnly(['date', 'hour', 'name', 'note', 'contact', 'ref', 'type', 'created'])
         && request.resource.data.date is string && request.resource.data.date.size() == 10
         && request.resource.data.hour is int
         && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60
         && request.resource.data.note is string && request.resource.data.note.size() <= 300
         && request.resource.data.get('contact', '') is string && request.resource.data.get('contact', '').size() <= 100
+        // ref — код запрошення від учня («Приведи друга»)
+        && request.resource.data.get('ref', '') is string && request.resource.data.get('ref', '').size() <= 12
         && request.resource.data.type in ['regular', 'once', 'trial'];
       allow read, update, delete: if isTeacher();
     }

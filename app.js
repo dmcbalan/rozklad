@@ -19,6 +19,17 @@ const PACKS = [{ n: 1, sum: 350 }, { n: 10, sum: 3500 }, { n: 20, sum: 6500 }];
 const LABEL = { present: 'Був', absent: 'Пропустив', excused: 'Перенесено' };
 const KIND = { regular: 'За розкладом', makeup: 'Відпрацювання', extra: 'Додаткове', moved: 'Перенос', trial: 'Пробний', busy: 'Зайнято' };
 const TRIAL_RES = { yes: '✅ Продовжує', think: '🤔 Думає', no: '❌ Не продовжує' };
+// «Приведи друга»: друг прийшов за посиланням, пробний → «Продовжує» = REF_BONUS ₴ тому, хто запросив
+const REF_BONUS = 500, REF_MAX = 3; // shortcut: друзі понад REF_MAX не оплачуються — змінити тут
+// Код запрошення — короткий хеш коду кабінету: у посиланні не світиться доступ до кабінету
+const refCode = tok => { let h = 2166136261; for (const c of String(tok)) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0; return h.toString(36).padStart(7, '0'); };
+console.assert(refCode('abc') === refCode('abc') && refCode('abc') !== refCode('abd') && /^[a-z0-9]{7}$/.test(refCode('k3f9x2ab')), 'refCode()');
+const refEarned = joined => Math.min(joined, REF_MAX) * REF_BONUS;
+console.assert(refEarned(0) === 0 && refEarned(1) === 500 && refEarned(3) === 1500 && refEarned(5) === 1500, 'refEarned()');
+// Хто прийшов за посиланням: ?ref=код запам'ятовується, поки друг не залишить заявку
+const refIn = (new URLSearchParams(location.search).get('ref') || '').toLowerCase();
+if (/^[a-z0-9]{4,12}$/.test(refIn)) try { localStorage.setItem('rozklad-ref', refIn); } catch {}
+const myRef = () => { try { return localStorage.getItem('rozklad-ref') || ''; } catch { return ''; } };
 const remaining = (paid, records) => (paid || 0) - records.filter(r => CHARGED.includes(r.status)).length;
 console.assert(remaining(8, [{ status: 'present' }, { status: 'absent' }, { status: 'excused' }]) === 6, 'remaining()');
 
@@ -362,6 +373,7 @@ function renderMe() {
   renderMeChat();
   renderAwards(g);
   renderAvatarTab(g);
+  renderFriends();
   renderRate();
   renderPhotoGrid($('#photoGrid'), token, mePhotos, false);
 }
@@ -610,6 +622,7 @@ function renderNav() {
 function render() {
   if (folioId) return renderFolio();
   $('#trialBtn').hidden = !!me;
+  $('#refHi').hidden = !myRef() || !!me || isTeacher;
   const q = $('#search').value.trim().toLowerCase(), v = viewWeek(), memo = {}, on = d => memo[d] ||= slotsOn(d);
   $('#tzLabel').textContent = tz === BASE_TZ ? 'Київський час' : `${tzName(tz)} · ${gmt(tz)}`;
   $('#tzBtn').classList.toggle('on', tz !== BASE_TZ);
@@ -716,6 +729,7 @@ function renderStudents(recs, rem) {
         ${last.length ? `<div class="dots" aria-label="Останні уроки"><small>Уроки</small>${last.map(x => `<i class="${x.status}" title="${longDate(x.date)} · ${LABEL[x.status]}">${{ present: '✓', absent: '✕', excused: '↻' }[x.status] || ''}</i>`).join('')}</div>` : ''}
         <div class="medals">${g.medals.map(b => medalHtml(b, 'mini')).join('')}</div>
         ${spin ? `<small>🎡 Колесо цього тижня: <b>${esc(PRIZES[spin.prize]?.t || '')}</b></small>` : ''}
+        ${refLine(n, st)}
       </div>
       <div class="rem"><strong>${r}</strong><small>з ${st.paid || 0} оплачених</small></div>
       <div class="stu-actions">
@@ -854,6 +868,16 @@ function renderStats() {
     ${absentTop.length ? `<h4 class="sep">Найчастіше пропускають (3 міс.)</h4><p>${absentTop.map(([n, c]) => `<b>${esc(n)}</b> — ${c}`).join(' · ')}</p>` : ''}`;
 }
 
+const refName = code => Object.entries(students).find(([, st]) => st.token && refCode(st.token) === code)?.[0] || '';
+const refFriends = code => Object.entries(changes).filter(([, c]) => c.kind === 'trial' && c.ref === code);
+// Картка учня: друзі за його посиланням, зароблено/виплачено, кнопка «Виплатив»
+function refLine(n, st) {
+  if (!st.token) return '';
+  const fr = refFriends(refCode(st.token)), joined = fr.filter(([, c]) => c.result === 'yes').length, paid = st.refPaid || 0, due = refEarned(joined) - paid;
+  if (!fr.length && !paid) return '';
+  return `<small>🎁 Друзі: ${fr.length}, займаються ${joined} · заробив(ла) ${money(refEarned(joined))}, виплачено ${money(paid)}</small>
+    ${due > 0 ? `<button class="ghost link-btn warnbtn" data-refpay="${esc(n)}" data-sum="${due}">💸 Виплатив ${money(due)}</button>` : ''}`;
+}
 function renderRequests() {
   const list = Object.entries(requests).sort((a, b) => (a[1].date + pad(a[1].hour)).localeCompare(b[1].date + pad(b[1].hour)));
   $('#reqCount').hidden = !list.length;
@@ -863,7 +887,7 @@ function renderRequests() {
       <span class="avatar" style="--h:${hue(r.name)}">${esc(r.name[0] || '?')}</span>
       <div class="who"><b>${esc(r.name)}</b>
         <small>${DAYS[dayIdx(parseIso(r.date))]}, ${longDate(r.date)} · ${pad(r.hour)}:00 · ${{ regular: 'щотижня', once: 'разово', trial: '🎁 пробний урок' }[r.type] || ''}</small>
-        ${r.contact ? `<small>📞 ${esc(r.contact)}</small>` : ''}${r.note ? `<small>${esc(r.note)}</small>` : ''}</div>
+        ${r.contact ? `<small>📞 ${esc(r.contact)}</small>` : ''}${r.ref ? `<small>🎁 Від друга: ${esc(refName(r.ref) || 'код ' + r.ref)}</small>` : ''}${r.note ? `<small>${esc(r.note)}</small>` : ''}</div>
       <div class="req-actions"><button class="ghost danger" data-req="${id}" data-act="no">Відхилити</button><button class="primary" data-req="${id}" data-act="yes">Прийняти</button></div>
     </div>`).join('') : '<p class="empty">Нових заявок немає. Учні залишають їх через кнопку «Вільні вікна» або «Пробний урок».</p>';
   const trials = Object.entries(changes).filter(([, c]) => c.kind === 'trial')
@@ -873,7 +897,7 @@ function renderRequests() {
       <span class="avatar" style="--h:${hue(c.student)}">${esc(c.student[0] || '?')}</span>
       <div class="who"><b>${esc(c.student)}</b>
         <small>${DAYS[dayIdx(parseIso(c.date))]}, ${longDate(c.date)} · ${pad(c.hour)}:00 · ${c.done ? TRIAL_RES[c.result] || 'проведено' : 'заплановано'}</small>
-        ${c.note ? `<small>${esc(c.note)}</small>` : ''}</div>
+        ${c.note ? `<small>${esc(c.note)}</small>` : ''}${c.ref ? `<small>🎁 Порадив(ла): ${esc(refName(c.ref) || 'код ' + c.ref)}</small>` : ''}</div>
       <div class="req-actions"><button class="ghost" data-trial="${id}">${c.done ? 'Змінити' : 'Підсумок'}</button></div>
     </div>`).join('') : '<p class="muted small">Ще не було пробних. Додай через клітинку розкладу («+ Пробний») або прийми заявку.</p>');
 }
@@ -916,7 +940,7 @@ function syncPublic(recs, rem) {
     const data = { name: n, paid: st.paid || 0, remaining: rem(n),
       history: (recs[n] || []).slice(0, 30).map(x => ({ id: x.id, date: x.date, hour: x.hour ?? null, status: x.status, kind: x.kind || 'regular' })),
       notes: notesOf(n).slice(0, 20).map(x => ({ date: x.date, topic: x.topic || '', homework: x.homework || '' })),
-      streak: pr.streak, present: pr.present, best: pr.best, badges: st.badges || [], certs: st.certs || [], pid: st.pid || '' };
+      streak: pr.streak, present: pr.present, best: pr.best, badges: st.badges || [], certs: st.certs || [], pid: st.pid || '', refPaid: st.refPaid || 0 };
     const json = JSON.stringify(data);
     if (synced[st.token] === json) continue;
     synced[st.token] = json;
@@ -974,6 +998,9 @@ function openTrial(id) {
     ${c.note ? `<p class="muted">${esc(c.note)}</p>` : ''}
     <label class="fl">Хто був на пробному<input id="editName" list="names" value="${esc(c.student)}" autocomplete="off"></label>
     <label class="fl">Результат<select id="trRes">${Object.entries(TRIAL_RES).map(([k, v]) => `<option value="${k}"${c.result === k ? ' selected' : ''}>${v}</option>`).join('')}</select></label>
+    <label class="fl">Хто порадив (отримає ${money(REF_BONUS)}, якщо продовжує)<select id="trRef"><option value="">Ніхто / знайшов сам</option>${Object.entries(students)
+      .filter(([n, st]) => st.token && !isArchived(n)).sort((a, b) => a[0].localeCompare(b[0], 'uk'))
+      .map(([n, st]) => `<option value="${refCode(st.token)}"${c.ref === refCode(st.token) ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
     <label class="fl">Поповнення абонемента<select id="trPack"><option value="">Без оплати зараз</option>${PACKS.map((p, i) => `<option value="${i}">${p.n} ${lessonsWord(p.n)} — ${money(p.sum)}</option>`).join('')}</select></label>
     <p class="muted small">«Продовжує» додає учня в «Учні», оплата йде в абонемент. Пробний зникає з розкладу й лишається в «Заявки → Пробні уроки».</p>
     <div class="actions"><button data-act="trialDone" class="primary">✅ Проведено</button><button data-act="trialDel" class="ghost danger">Видалити пробний</button></div>`;
@@ -1010,7 +1037,7 @@ $('#edit').onclick = e => {
     case 'trialDone': {
       if (needName()) return;
       const res = $('#trRes').value, pk = PACKS[$('#trPack').value];
-      p = F.setDoc(F.doc(db, 'changes', dlg.dataset.trial), { done: true, result: res, student: name }, { merge: true });
+      p = F.setDoc(F.doc(db, 'changes', dlg.dataset.trial), { done: true, result: res, student: name, ref: $('#trRef').value }, { merge: true });
       if (res === 'yes') p = Promise.all([p, ensureStudent(name)]);
       if (pk) pay(name, pk.n, pk.sum);
       break;
@@ -1192,7 +1219,7 @@ $('#grid').onclick = $('#agenda').onclick = e => {
     if (!configured) return toast('Спочатку підключи Firebase');
     const f = $('#bookForm');
     f.dataset.date = date; f.dataset.hour = h;
-    f.elements['type'].value = bookTrial ? 'trial' : 'regular';
+    f.elements['type'].value = bookTrial || myRef() ? 'trial' : 'regular';
     $('#bookSlot').textContent = whenText(instant(date, h * 60, BASE_TZ)) + (tz !== BASE_TZ ? ` (${kyivNote(h)})` : '');
     return $('#book').showModal();
   }
@@ -1204,7 +1231,7 @@ $('#bookForm').onsubmit = e => {
   e.preventDefault();
   const f = e.target, el = f.elements;
   const data = { date: f.dataset.date, hour: +f.dataset.hour, name: el['name'].value.trim().slice(0, 60), note: el['note'].value.trim().slice(0, 300),
-    contact: el['contact'].value.trim().slice(0, 100), type: el['type'].value, created: F.serverTimestamp() };
+    contact: el['contact'].value.trim().slice(0, 100), type: el['type'].value, created: F.serverTimestamp(), ...(myRef() ? { ref: myRef() } : {}) };
   if (!data.name) return toast("Вкажи своє ім'я");
   if (data.type === 'trial' && !data.contact) return toast('Залиш телефон або Telegram, щоб викладач підтвердив пробний');
   run(F.addDoc(F.collection(db, 'requests'), data).then(() => {
@@ -1223,7 +1250,7 @@ $('#requests').onclick = e => {
   if (slot && !slot.cancelled) return toast(`Цей час уже зайнятий: ${slot.student || 'зайнято'}`);
   const bt = F.writeBatch(db);
   if (r.type === 'regular') bt.set(F.doc(db, 'lessons', `${dayIdx(parseIso(r.date))}-${r.hour}`), { student: name });
-  else if (r.type === 'trial') bt.set(F.doc(F.collection(db, 'changes')), { date: r.date, hour: r.hour, student: name, kind: 'trial', note: [r.contact, r.note].filter(Boolean).join(' · ').slice(0, 300) });
+  else if (r.type === 'trial') bt.set(F.doc(F.collection(db, 'changes')), { date: r.date, hour: r.hour, student: name, kind: 'trial', note: [r.contact, r.note].filter(Boolean).join(' · ').slice(0, 300), ...(r.ref ? { ref: r.ref } : {}) });
   else bt.set(F.doc(F.collection(db, 'changes')), { date: r.date, hour: r.hour, student: name, kind: 'extra' });
   if (r.type !== 'trial') bt.set(F.doc(db, 'students', name), { name }, { merge: true });
   bt.delete(F.doc(db, 'requests', id));
@@ -1333,6 +1360,9 @@ $('#students').onclick = async e => {
     const n = msg.dataset.name;
     return copyText(msg.dataset.msg === 'remind' ? msgRemind(n) : msgReport(n), `Повідомлення для ${n} скопійовано — встав у Telegram/Viber`);
   }
+  const rp = e.target.closest('[data-refpay]');
+  if (rp) return run(F.setDoc(F.doc(db, 'students', rp.dataset.refpay), { refPaid: F.increment(+rp.dataset.sum) }, { merge: true })
+    .then(() => toast(`Виплату ${money(+rp.dataset.sum)} записано`)));
   const aw = e.target.closest('[data-awards]');
   if (aw) return openAwards(aw.dataset.awards);
   const ce = e.target.closest('[data-cert]');
@@ -1447,6 +1477,62 @@ $('#meAvatar').onclick = e => {
   render();
   run(F.setDoc(F.doc(db, 'public', token, 'avatar', 'me'), meAvatar));
 };
+
+// ---------- «Приведи друга»: посилання, доріжка з подарунками, друзі й виплати ----------
+const refUrl = () => location.origin + location.pathname + '?ref=' + refCode(token);
+const REF_TEXT = 'Привіт! Я займаюсь у Balan Study — там цікаво 🚀 Записуйся на пробний урок за моїм посиланням:';
+function renderFriends() {
+  const fr = refFriends(refCode(token)).sort((a, b) => b[1].date.localeCompare(a[1].date));
+  const joined = fr.filter(([, c]) => c.result === 'yes').length, earned = refEarned(joined), paid = me.refPaid || 0, url = refUrl();
+  const steps = Array.from({ length: REF_MAX }, (_, i) => `<button class="ref-step${joined > i ? ' got' : joined === i ? ' next' : ''}" data-gift="${i}">
+      <span class="ref-gift">${joined > i ? '💸' : '🎁'}</span><b>${money(REF_BONUS * (i + 1))}</b><small>${i + 1} ${plural(i + 1, 'друг', 'друзі', 'друзів')}</small></button>`).join('<i class="ref-line"></i>');
+  const html = `<div class="ref-hero"><span class="ref-big">🤝</span><div><h3>Приведи друга — отримай до ${money(refEarned(REF_MAX))}</h3>
+      <p>За кожного друга, який почне займатися, — <b>${money(REF_BONUS)}</b> на картку батьків.</p></div></div>
+    <div class="ref-road">${steps}</div>
+    <div class="ref-bar"><i style="width:${Math.min(joined, REF_MAX) / REF_MAX * 100}%"></i></div>
+    <div class="ref-sum"><div><b>${money(earned)}</b><small>заробив(ла)</small></div><div><b>${money(paid)}</b><small>отримав(ла) на картку</small></div>
+      ${earned > paid ? `<div class="wait"><b>${money(earned - paid)}</b><small>чекає на виплату</small></div>` : ''}</div>
+    ${earned > paid ? `<p class="ref-note">💬 Напиши викладачу в <button class="link" data-gotab="me-chat">чат</button>, на яку картку батьків переказати.</p>` : ''}
+    <p class="label lbl-gap">Твоє посилання-запрошення</p>
+    <div class="ref-link"><input readonly value="${esc(url)}" aria-label="Посилання-запрошення"><button class="btn sm" data-refshare>Поділитися</button></div>
+    <div class="ref-apps"><a class="ghost link-btn" target="_blank" rel="noopener" href="https://t.me/share/url?url=${encodeURIComponent(url)}&amp;text=${encodeURIComponent(REF_TEXT)}">✈️ Telegram</a>
+      <a class="ghost link-btn" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(REF_TEXT + ' ' + url)}">💬 WhatsApp</a>
+      <button class="ghost link-btn" data-refcopy>📋 Копіювати</button></div>
+    <p class="label lbl-gap">Як це працює</p>
+    <ol class="ref-how"><li><span>1</span>Надішли посилання другу чи подрузі</li><li><span>2</span>Друг записується на пробний урок</li><li><span>3</span>Друг починає займатися — тобі ${money(REF_BONUS)}! 🎉</li></ol>
+    <p class="label lbl-gap">Мої друзі</p>
+    ${fr.length ? `<ul class="ref-list">${fr.map(([, c]) => `<li class="${c.result === 'yes' ? 'yes' : ''}"><span class="avatar" style="--h:${hue(c.student)}">${esc(c.student[0] || '?')}</span><b>${esc(c.student)}</b>
+      <small>${c.result === 'yes' ? `✅ займається · +${money(REF_BONUS)}` : c.done ? (c.result === 'think' ? '🤔 ще думає' : 'не продовжив(ла)') : `📅 пробний ${longDate(c.date)}`}</small></li>`).join('')}</ul>`
+      : '<p class="muted small">Поки нікого. Надішли посилання — перший подарунок зовсім поруч! 🎁</p>'}`;
+  const box = $('#meFriends');
+  if (box._html !== html) box.innerHTML = box._html = html;
+  $('#refTeaser').innerHTML = `<span>🤝</span><span><b>Приведи друга — ${money(REF_BONUS)} на картку</b><small>${joined ? `Вже ${joined} ${plural(joined, 'друг займається', 'друзі займаються', 'друзів займаються')} · ${money(earned)}` : 'За кожного друга, який почне займатися'}</small></span><i>›</i>`;
+  // новий друг почав займатися — конфеті (один раз на цьому пристрої)
+  let seen = 0; try { seen = +localStorage.getItem('rozklad-refseen-' + token) || 0; } catch {}
+  if (joined > seen && !$('#tab-me-friends').hidden) { try { localStorage.setItem('rozklad-refseen-' + token, joined); } catch {} burst(box); }
+}
+function burst(box) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  for (let i = 0; i < 36; i++) {
+    const s = document.createElement('i');
+    s.className = 'confetti'; s.textContent = ['🎉', '💸', '⭐', '🎁'][i % 4];
+    s.style.left = Math.random() * 100 + '%'; s.style.animationDelay = Math.random() * .5 + 's';
+    box.append(s); setTimeout(() => s.remove(), 3000);
+  }
+}
+$('#me').addEventListener('click', e => {
+  const go = e.target.closest('[data-gotab]')?.dataset.gotab;
+  if (go) return go === 'me-chat' ? setView('chat') : showTab($('#me .tabs'), go);
+  if (e.target.closest('[data-refcopy]')) return copyText(refUrl(), 'Посилання скопійовано — надішли другу 🚀');
+  if (e.target.closest('[data-refshare]')) return navigator.share
+    ? navigator.share({ title: 'Balan Study', text: REF_TEXT, url: refUrl() }).catch(() => {}) : copyText(refUrl(), 'Посилання скопійовано — надішли другу 🚀');
+  const g = e.target.closest('[data-gift]');
+  if (g) {
+    g.classList.remove('shake'); void g.offsetWidth; g.classList.add('shake');
+    const i = +g.dataset.gift, joined = refFriends(refCode(token)).filter(([, c]) => c.result === 'yes').length;
+    toast(joined > i ? `Цей подарунок вже твій: ${money(REF_BONUS * (i + 1))} 🎉` : `Ще ${i + 1 - joined} ${plural(i + 1 - joined, 'друг', 'друзі', 'друзів')} — і подарунок відкриється!`);
+  }
+});
 
 // ---------- Нагороди учня: рівень, сертифікати, колесо, колекція медалей ----------
 function renderAwards(g) {
@@ -1680,6 +1766,7 @@ const N_ICON = { hw: '📚', badge: '🏅', review: '📝', cert: '🎓' }, N_GO
 function feed() {
   const out = [];
   if (me) {
+    for (const [id, c] of refFriends(refCode(token))) if (c.result === 'yes') out.push({ id: 'ref' + id, t: Date.parse(c.date + 'T12:00'), icon: '🎉', text: `${c.student} почав(ла) займатися — тобі +${money(REF_BONUS)}!`, go: 'me-friends' });
     for (const [id, x] of Object.entries(meNotifs)) out.push({ id, t: ms(x.created), icon: N_ICON[x.type] || '🔔', text: x.text, go: N_GO[x.type] || 'me-home' });
     for (const [id, m] of Object.entries(meMsgs)) if (m.by === 'teacher') out.push({ id, t: ms(m.created), icon: '💬', text: `Викладач: ${msgText(m)}`, go: 'me-chat' });
   } else if (isTeacher) {
