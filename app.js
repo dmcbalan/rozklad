@@ -21,6 +21,8 @@ const KIND = { regular: 'За розкладом', makeup: 'Відпрацюва
 const TRIAL_RES = { yes: '✅ Продовжує', think: '🤔 Думає', no: '❌ Не продовжує' };
 // «Приведи друга»: друг прийшов за посиланням, пробний → «Продовжує» = REF_BONUS ₴ тому, хто запросив
 const REF_BONUS = 500, REF_MAX = 3; // shortcut: друзі понад REF_MAX не оплачуються — змінити тут
+const FRIEND_GIFT = 1; // подарунок другові: стільки безкоштовних уроків, якщо після пробного продовжує
+const giftText = () => `+${FRIEND_GIFT} ${plural(FRIEND_GIFT, 'урок', 'уроки', 'уроків')} у подарунок`;
 // Код запрошення — короткий хеш коду кабінету: у посиланні не світиться доступ до кабінету
 const refCode = tok => { let h = 2166136261; for (const c of String(tok)) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0; return h.toString(36).padStart(7, '0'); };
 console.assert(refCode('abc') === refCode('abc') && refCode('abc') !== refCode('abd') && /^[a-z0-9]{7}$/.test(refCode('k3f9x2ab')), 'refCode()');
@@ -623,6 +625,7 @@ function render() {
   if (folioId) return renderFolio();
   $('#trialBtn').hidden = !!me;
   $('#refHi').hidden = !myRef() || !!me || isTeacher;
+  $('#refGift').textContent = giftText();
   const q = $('#search').value.trim().toLowerCase(), v = viewWeek(), memo = {}, on = d => memo[d] ||= slotsOn(d);
   $('#tzLabel').textContent = tz === BASE_TZ ? 'Київський час' : `${tzName(tz)} · ${gmt(tz)}`;
   $('#tzBtn').classList.toggle('on', tz !== BASE_TZ);
@@ -1001,6 +1004,7 @@ function openTrial(id) {
     <label class="fl">Хто порадив (отримає ${money(REF_BONUS)}, якщо продовжує)<select id="trRef"><option value="">Ніхто / знайшов сам</option>${Object.entries(students)
       .filter(([n, st]) => st.token && !isArchived(n)).sort((a, b) => a[0].localeCompare(b[0], 'uk'))
       .map(([n, st]) => `<option value="${refCode(st.token)}"${c.ref === refCode(st.token) ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
+    <label class="check"><input type="checkbox" id="trGift"${c.gift ? ' disabled' : c.ref ? ' checked' : ''}> 🎁 Подарунок від друга: ${giftText()} ${c.gift ? '(вже нараховано)' : '(якщо продовжує)'}</label>
     <label class="fl">Поповнення абонемента<select id="trPack"><option value="">Без оплати зараз</option>${PACKS.map((p, i) => `<option value="${i}">${p.n} ${lessonsWord(p.n)} — ${money(p.sum)}</option>`).join('')}</select></label>
     <p class="muted small">«Продовжує» додає учня в «Учні», оплата йде в абонемент. Пробний зникає з розкладу й лишається в «Заявки → Пробні уроки».</p>
     <div class="actions"><button data-act="trialDone" class="primary">✅ Проведено</button><button data-act="trialDel" class="ghost danger">Видалити пробний</button></div>`;
@@ -1037,9 +1041,11 @@ $('#edit').onclick = e => {
     case 'trialDone': {
       if (needName()) return;
       const res = $('#trRes').value, pk = PACKS[$('#trPack').value];
-      p = F.setDoc(F.doc(db, 'changes', dlg.dataset.trial), { done: true, result: res, student: name, ref: $('#trRef').value }, { merge: true });
+      const gift = res === 'yes' && $('#trGift').checked && !changes[dlg.dataset.trial]?.gift;
+      p = F.setDoc(F.doc(db, 'changes', dlg.dataset.trial), { done: true, result: res, student: name, ref: $('#trRef').value, ...(gift ? { gift: true } : {}) }, { merge: true });
       if (res === 'yes') p = Promise.all([p, ensureStudent(name)]);
-      if (pk) pay(name, pk.n, pk.sum);
+      // подарункові уроки — в абонемент без суми, тож дохід у статистиці не змінюється
+      if (pk || gift) pay(name, (pk?.n || 0) + (gift ? FRIEND_GIFT : 0), pk?.sum || 0);
       break;
     }
     case 'trialDel': p = F.deleteDoc(F.doc(db, 'changes', dlg.dataset.trial)); break;
@@ -1480,14 +1486,14 @@ $('#meAvatar').onclick = e => {
 
 // ---------- «Приведи друга»: посилання, доріжка з подарунками, друзі й виплати ----------
 const refUrl = () => location.origin + location.pathname + '?ref=' + refCode(token);
-const REF_TEXT = 'Привіт! Я займаюсь у Balan Study — там цікаво 🚀 Записуйся на пробний урок за моїм посиланням:';
+const REF_TEXT = `Привіт! Я займаюсь у Balan Study — там цікаво 🚀 Записуйся на пробний урок за моїм посиланням, а якщо продовжиш — ${giftText()} 🎁`;
 function renderFriends() {
   const fr = refFriends(refCode(token)).sort((a, b) => b[1].date.localeCompare(a[1].date));
   const joined = fr.filter(([, c]) => c.result === 'yes').length, earned = refEarned(joined), paid = me.refPaid || 0, url = refUrl();
   const steps = Array.from({ length: REF_MAX }, (_, i) => `<button class="ref-step${joined > i ? ' got' : joined === i ? ' next' : ''}" data-gift="${i}">
       <span class="ref-gift">${joined > i ? '💸' : '🎁'}</span><b>${money(REF_BONUS * (i + 1))}</b><small>${i + 1} ${plural(i + 1, 'друг', 'друзі', 'друзів')}</small></button>`).join('<i class="ref-line"></i>');
   const html = `<div class="ref-hero"><span class="ref-big">🤝</span><div><h3>Приведи друга — отримай до ${money(refEarned(REF_MAX))}</h3>
-      <p>За кожного друга, який почне займатися, — <b>${money(REF_BONUS)}</b> на картку батьків.</p></div></div>
+      <p>За кожного друга, який почне займатися, — <b>${money(REF_BONUS)}</b> на картку батьків. А другові — <b>${giftText()}</b> 🎁</p></div></div>
     <div class="ref-road">${steps}</div>
     <div class="ref-bar"><i style="width:${Math.min(joined, REF_MAX) / REF_MAX * 100}%"></i></div>
     <div class="ref-sum"><div><b>${money(earned)}</b><small>заробив(ла)</small></div><div><b>${money(paid)}</b><small>отримав(ла) на картку</small></div>
@@ -1499,7 +1505,7 @@ function renderFriends() {
       <a class="ghost link-btn" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(REF_TEXT + ' ' + url)}">💬 WhatsApp</a>
       <button class="ghost link-btn" data-refcopy>📋 Копіювати</button></div>
     <p class="label lbl-gap">Як це працює</p>
-    <ol class="ref-how"><li><span>1</span>Надішли посилання другу чи подрузі</li><li><span>2</span>Друг записується на пробний урок</li><li><span>3</span>Друг починає займатися — тобі ${money(REF_BONUS)}! 🎉</li></ol>
+    <ol class="ref-how"><li><span>1</span>Надішли посилання другу чи подрузі</li><li><span>2</span>Друг записується на пробний урок</li><li><span>3</span>Друг починає займатися — тобі ${money(REF_BONUS)}, а йому ${giftText()}! 🎉</li></ol>
     <p class="label lbl-gap">Мої друзі</p>
     ${fr.length ? `<ul class="ref-list">${fr.map(([, c]) => `<li class="${c.result === 'yes' ? 'yes' : ''}"><span class="avatar" style="--h:${hue(c.student)}">${esc(c.student[0] || '?')}</span><b>${esc(c.student)}</b>
       <small>${c.result === 'yes' ? `✅ займається · +${money(REF_BONUS)}` : c.done ? (c.result === 'think' ? '🤔 ще думає' : 'не продовжив(ла)') : `📅 пробний ${longDate(c.date)}`}</small></li>`).join('')}</ul>`
@@ -1970,7 +1976,7 @@ async function ensurePid(n) {
 function syncFolio(n, st, recs) {
   const g = growthOf(n, recs), all = recs[n] || [], av = avatars[st.token];
   const data = { name: n, lvl: g.lvl, xp: g.xp, medals: g.medals, certs: st.certs || [], lessons: progress(all).present, since: all.length ? all.at(-1).date : '',
-    avatar: av ? Object.fromEntries(Object.keys(AV_DEFAULT).map(k => [k, av[k] || AV_DEFAULT[k]])) : null };
+    avatar: av ? Object.fromEntries(Object.keys(AV_DEFAULT).map(k => [k, av[k] || AV_DEFAULT[k]])) : null, ref: st.token ? refCode(st.token) : '' };
   const json = JSON.stringify(data);
   if (synced['p' + st.pid] === json) return;
   synced['p' + st.pid] = json;
@@ -2029,7 +2035,9 @@ function renderFolio() {
     <div class="folio-cta">
       <div><h2>Хочете, щоб ваша дитина теж створювала ігри, сайти й 3D-моделі?</h2>
       <p>Індивідуальні онлайн-заняття 1:1 з програмування, створення ігор, сайтів і відеомонтажу.</p></div>
-      <a class="btn" href="https://balanstudy.com.ua/" target="_blank" rel="noopener">Дізнатися про заняття</a>
+      <div class="folio-btns">${/^[a-z0-9]{4,12}$/.test(f.ref || '') ? `<a class="btn" href="${location.pathname}?ref=${f.ref}">🎁 Хочу так само — пробний урок</a>` : ''}
+        <a class="btn ${f.ref ? 'ghost' : ''}" href="https://balanstudy.com.ua/" target="_blank" rel="noopener">Дізнатися про заняття</a></div>
+      ${f.ref ? `<p class="small">Запис за запрошенням ${esc(f.name)} — ${giftText()}, якщо продовжите 🎁</p>` : ''}
     </div>`;
 }
 $('#folio').onclick = e => {
