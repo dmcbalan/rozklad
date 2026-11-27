@@ -71,7 +71,7 @@ function levelOf(xp) { let lvl = 1, need = 100, rest = xp; while (rest >= need) 
 console.assert(levelOf(0).lvl === 1 && levelOf(100).lvl === 2 && levelOf(249).lvl === 2 && levelOf(250).lvl === 3, 'levelOf()');
 const RANKS = ['Новачок', 'Учень', 'Дослідник', 'Винахідник', 'Майстер', 'Експерт', 'Гуру', 'Легенда'];
 const rank = lvl => RANKS[Math.min(RANKS.length - 1, Math.floor((lvl - 1) / 2))];
-const XP = { lesson: 10, hw: 15, medal: 5 };
+const XP = { lesson: 10, hw: 15, medal: 5, review: 50 }; // review — відгук 5★ від REVIEW_MIN символів (схований викладачем не рахується)
 const plural = (n, one, few, many) => { const m = Math.abs(n) % 100, k = m % 10; return m > 10 && m < 20 ? many : k === 1 ? one : k >= 2 && k <= 4 ? few : many; };
 console.assert(plural(1, 'а', 'б', 'в') === 'а' && plural(3, 'а', 'б', 'в') === 'б' && plural(11, 'а', 'б', 'в') === 'в' && plural(22, 'а', 'б', 'в') === 'б', 'plural()');
 // Серія = уроки «Був» поспіль; «Пропустив» обнуляє, «Перенесено» не впливає
@@ -92,15 +92,15 @@ const autoBadges = ({ present, best, hwOk = 0, lucky = false, certs = 0, lvl = 1
   ...(lucky ? [[0, 'Щасливчик 🍀']] : []), ...(certs ? [[0, 'Випускник 🎓']] : []),
 ].map(x => x[1]);
 // Рівень і всі медалі учня: відвідування, зараховані ДЗ, медалі від викладача, бонуси колеса
-function growth({ present = 0, best = 0, manual = [], subsList = [], spinsList = [], certs = [] }) {
+function growth({ present = 0, best = 0, manual = [], subsList = [], spinsList = [], certs = [], reviews = 0 }) {
   const hwOk = subsList.filter(x => x.status === 'ok').length;
   const bonus = spinsList.reduce((a, x) => a + (PRIZES[x.prize]?.xp || 0), 0);
-  const xp = present * XP.lesson + hwOk * XP.hw + manual.length * XP.medal + bonus;
+  const xp = present * XP.lesson + hwOk * XP.hw + manual.length * XP.medal + bonus + reviews * XP.review;
   const lv = levelOf(xp);
   const auto = autoBadges({ present, best, hwOk, lucky: spinsList.some(x => PRIZES[x.prize]?.lucky), certs: certs.length, lvl: lv.lvl });
   return { xp, hwOk, ...lv, medals: [...new Set([...manual, ...auto])] };
 }
-console.assert(growth({ present: 10, manual: ['Логік 🧩'], subsList: [{ status: 'ok' }, { status: 'new' }], spinsList: [{ prize: 6 }] }).xp === 100 + 15 + 5 + 20, 'growth()');
+console.assert(growth({ present: 10, manual: ['Логік 🧩'], subsList: [{ status: 'ok' }, { status: 'new' }], spinsList: [{ prize: 6 }], reviews: 2 }).xp === 100 + 15 + 5 + 20 + 100, 'growth()');
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
@@ -1430,12 +1430,16 @@ $('#seed').onclick = () => {
 setInterval(render, 30_000); // оновлює підсвітку поточної години й статус «в мережі»
 
 // ---------- Рівні й медалі ----------
+// Зараховані відгуки: 5★ з текстом від REVIEW_MIN символів, якщо викладач не сховав їх з сайту
+const goodReviews = list => list.filter(x => revOk(x) && !reviewsPub?.[revId(x)]?.hidden).length;
 const myGrowth = () => growth({ present: me.present || 0, best: me.best || 0, manual: (me.badges || []).filter(isManual),
-  subsList: Object.values(meSubs), spinsList: Object.values(meSpins), certs: me.certs || [] });
+  subsList: Object.values(meSubs), spinsList: Object.values(meSpins), certs: me.certs || [],
+  reviews: goodReviews(Object.entries(meRatings).map(([id, x]) => ({ ...x, id, token }))) });
 function growthOf(n, recs) {
   const st = students[n] || {}, tok = st.token, pr = progress(recs[n] || []);
   return growth({ present: pr.present, best: pr.best, manual: st.badges || [], certs: st.certs || [],
-    subsList: tok ? Object.values(subs).filter(x => x.token === tok) : [], spinsList: tok ? Object.values(spins).filter(x => x.token === tok) : [] });
+    subsList: tok ? Object.values(subs).filter(x => x.token === tok) : [], spinsList: tok ? Object.values(spins).filter(x => x.token === tok) : [],
+    reviews: tok ? goodReviews(Object.values(ratings).filter(x => x.token === tok)) : 0 });
 }
 const lvlHtml = g => `<div class="lvl"><b>${g.lvl}</b><div><span><b>${rank(g.lvl)}</b> · ${g.xp} XP</span>
   <div class="xpbar"><i style="width:${g.rest / g.need * 100}%"></i></div><small class="muted">до рівня ${g.lvl + 1}: ${g.need - g.rest} XP</small></div></div>`;
@@ -1561,7 +1565,7 @@ function renderAwards(g) {
   $('#meLevel').innerHTML = `${me.pid ? `<div class="folio-link"><span>🌐</span><div><b>Моє портфоліо</b><small class="muted">Сторінка з твоїми роботами, медалями й сертифікатами — покажи рідним</small></div>
       <a class="ghost link-btn" href="${esc(folioUrl(me.pid))}" target="_blank" rel="noopener">Відкрити</a><button class="btn sm" data-sharefolio>Поділитися</button></div>` : ''}
     <div class="lvl-card"><span class="av-face">${avatarSvg(meAv(), g.lvl, 72)}</span>${lvlHtml(g)}</div>
-    <p class="muted small">XP: урок +${XP.lesson} · зараховане ДЗ +${XP.hw} · медаль від викладача +${XP.medal} · бонуси колеса</p>
+    <p class="muted small">XP: урок +${XP.lesson} · зараховане ДЗ +${XP.hw} · медаль від викладача +${XP.medal} · відгук про урок на 5★ +${XP.review} · бонуси колеса</p>
     ${certs.length ? `<p class="label lbl-gap">🎓 Сертифікати</p><div class="certs">${certs.map((c, i) => `<button class="cert-card" data-showcert="${i}"><b>«${esc(c.course)}»</b><small>${longDate(c.date)} · відкрити</small></button>`).join('')}</div>` : ''}`;
   const have = new Set(g.medals), cats = [...new Set(MEDALS.map(m => m[3]))];
   $('#meMedals').innerHTML = `<p class="label lbl-gap">🏅 Колекція медалей · ${MEDALS.filter(m => have.has(`${m[0]} ${m[1]}`)).length} з ${MEDALS.length}</p>
@@ -1886,7 +1890,7 @@ $('#newRevs').onclick = e => {
   try { localStorage.setItem('rozklad-rev-seen', Math.max(...Object.values(ratings).map(x => ms(x.created)), Date.now())); } catch {}
   render();
 };
-const REVIEW_MIN = 10; // коротші коментарі («ок», «супер») на сайт не йдуть
+const REVIEW_MIN = 40; // коротші коментарі («ок», «супер») не дають XP і не йдуть на сайт
 const revId = x => refCode(x.token) + '_' + x.id; // без коду кабінету в id
 const revOk = x => x.stars === 5 && (x.comment || '').trim().length >= REVIEW_MIN;
 function syncReviews() {
@@ -1928,9 +1932,17 @@ const unrated = () => { const today = tzParts(BASE_TZ, Date.now()).date;
   return (me.history || []).filter(x => x.status === 'present' && x.date >= addDays(today, -7) && !ratingFor(x)); };
 const rateCandidate = () => unrated()[0];
 const RATE_HINT = ['', 'Зовсім не сподобалось 😕', 'Могло бути краще 🤔', 'Нормально 🙂', 'Добре! 😊', 'Супер! 🤩'];
+const XP_TIP = `<b>✍️ Напиши відгук про урок — отримай +${XP.review} XP!</b>
+  <span>2–3 речення: що робили і що сподобалось. Пиши грамотно, без помилок 🙂 Не впевнений — попроси ChatGPT або дорослих перевірити текст.</span><em></em>`;
+// Лічильник під полем: скільки ще написати до +50 XP
+function xpCount(box, text) {
+  const n = text.trim().length, em = box.querySelector('em');
+  if (em) em.textContent = n >= REVIEW_MIN ? `✅ Чудово! За цей відгук отримаєш +${XP.review} XP` : `Ще ${REVIEW_MIN - n} ${plural(REVIEW_MIN - n, 'символ', 'символи', 'символів')} до +${XP.review} XP`;
+  box.classList.toggle('ok', n >= REVIEW_MIN);
+}
 const starButtons = () => [1, 2, 3, 4, 5].map(i => `<button type="button" data-star="${i}" aria-label="${i} з 5">★</button>`).join('');
 const sendRating = (id, date, stars, comment) => run(F.setDoc(F.doc(db, 'public', token, 'ratings', id), { date, stars, comment: comment.trim().slice(0, 300), created: F.serverTimestamp() })
-  .then(() => toast(stars >= 4 ? 'Дякую за відгук! 💙' : 'Дякую! Врахуємо, щоб наступний урок був кращим 💙')));
+  .then(() => toast(revOk({ stars, comment }) ? `🎉 +${XP.review} XP за відгук! Дякую 💙` : stars >= 4 ? 'Дякую за відгук! 💙' : 'Дякую! Врахуємо, щоб наступний урок був кращим 💙')));
 // Спливне вікно після кожної відмітки «Був» — один раз на урок.
 // Показуючи його, позначаємо «запитано» всі неоцінені уроки, щоб старі не вискакували чергою одне за одним.
 function askRating(x, force) {
@@ -1942,6 +1954,7 @@ function askRating(x, force) {
   $('#rateTitle').textContent = `Як пройшов урок ${x.date === today ? 'сьогодні' : longDate(x.date)}${x.hour != null ? ` о ${hm(tzParts(tz, instant(x.date, x.hour * 60, BASE_TZ)).min)}` : ''}?`;
   $('#rateStars').innerHTML = starButtons();
   $('#rateHint').textContent = 'Обери від 1 до 5 зірок';
+  $('#rateXp').hidden = true;
   $('#rateDlgSend').disabled = true;
   $('#rateDlg').showModal();
 }
@@ -1953,7 +1966,10 @@ $('#rateStars').onclick = e => {
   $('#rateStars').querySelectorAll('[data-star]').forEach(x => x.classList.toggle('on', +x.dataset.star <= v));
   $('#rateHint').textContent = RATE_HINT[v];
   $('#rateDlgSend').disabled = false;
+  $('#rateXp').hidden = v !== 5;
+  xpCount($('#rateXp'), $('#rateForm').elements['comment'].value);
 };
+$('#rateForm').elements['comment'].addEventListener('input', e => xpCount($('#rateXp'), e.target.value));
 $('#rateForm').onsubmit = e => {
   e.preventDefault();
   const f = e.target, v = +f.dataset.v;
@@ -1973,7 +1989,7 @@ function renderRate() {
   box.hidden = !x;
   box.innerHTML = x ? `<p class="label">⭐ Як тобі урок ${longDate(x.date)}${x.hour != null ? ` о ${hm(tzParts(tz, instant(x.date, x.hour * 60, BASE_TZ)).min)}` : ''}?</p>
     <div class="stars" role="group" aria-label="Оцінка уроку">${starButtons()}</div>
-    <div class="rate-more" hidden><input id="rateText" maxlength="300" placeholder="Що сподобалось або що покращити (необов'язково)" aria-label="Коментар"><button class="btn sm" id="rateSend">Надіслати</button></div>` : '';
+    <div class="rate-more" hidden><p class="rate-xp" hidden>${XP_TIP}</p><textarea id="rateText" maxlength="300" rows="2" placeholder="Що сподобалось або що покращити (необов'язково)" aria-label="Коментар"></textarea><button class="btn sm" id="rateSend">Надіслати</button></div>` : '';
 }
 // «☆ Оцінити» в історії — те саме вікно, якщо спливне випадково закрили
 document.addEventListener('click', e => {
@@ -1982,12 +1998,15 @@ document.addEventListener('click', e => {
   const x = (me.history || []).find(h => rkey(h) === b.dataset.rate);
   if (x) askRating(x, true);
 });
+$('#rateBox').addEventListener('input', e => { if (e.target.id === 'rateText') xpCount($('#rateBox .rate-xp'), e.target.value); });
 $('#rateBox').onclick = e => {
   const box = $('#rateBox'), st = e.target.closest('[data-star]');
   if (st) {
     box.dataset.v = st.dataset.star;
     box.querySelectorAll('[data-star]').forEach(b => b.classList.toggle('on', +b.dataset.star <= +st.dataset.star));
     box.querySelector('.rate-more').hidden = false;
+    box.querySelector('.rate-xp').hidden = +st.dataset.star !== 5;
+    xpCount(box.querySelector('.rate-xp'), $('#rateText').value);
     return;
   }
   if (!e.target.closest('#rateSend') || !+box.dataset.v || !token || !F) return;
@@ -2461,6 +2480,7 @@ if (!configured) {
       mine('notifs', m => meNotifs = m);
       mine('avatar', m => meAvatar = m.me || {});
       mine('tree', m => { if (m.me) meTree = m.me; });
+      if (token) F.onSnapshot(F.collection(db, 'reviews'), s => { reviewsPub = {}; s.forEach(d => reviewsPub[d.id] = d.data()); render(); }, () => {});
       mine('ratings', m => { meRatings = m; meRatingsReady = true; });
       // «я в мережі»: раз на хвилину, поки кабінет відкритий на екрані
       const beat = () => token && me && document.visibilityState === 'visible'
