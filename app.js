@@ -391,11 +391,11 @@ function msgAtt(m, tok) {
 function renderMsgs(el, list, mine, key, tok) {
   const stick = el.scrollHeight - el.scrollTop - el.clientHeight < 60 || el.dataset.k !== key + list.length;
   let day = '';
-  const html = list.length ? list.map(m => {
+  const html = list.length ? list.map((m, i) => {
     const t = new Date(ms(m.created) || Date.now()), d = iso(t);
     const sep = d !== day ? `<p class="chat-day">${longDate(d)}</p>` : '';
     day = d;
-    return `${sep}<div class="msg${m.by === mine ? ' mine' : ''}">${m.by === mine && m.id ? `<button class="msg-del" data-delmsg="${m.id}" title="Скасувати повідомлення" aria-label="Скасувати повідомлення">✕</button>` : ''}${msgAtt(m, tok)}${esc(m.text || '')}<small>${t.toLocaleTimeString('uk', { hour: '2-digit', minute: '2-digit' })}</small></div>`;
+    return `${sep}<div class="msg${m.by === mine ? ' mine' : ''}${list[i + 1]?.by !== m.by || iso(new Date(ms(list[i + 1].created))) !== d ? ' tail' : ''}">${m.by === mine && m.id ? `<button class="msg-del" data-delmsg="${m.id}" title="Скасувати повідомлення" aria-label="Скасувати повідомлення">✕</button>` : ''}${msgAtt(m, tok)}${esc(m.text || '')}<small>${t.toLocaleTimeString('uk', { hour: '2-digit', minute: '2-digit' })}</small></div>`;
   }).join('') : `<p class="empty">${mine === 'student' ? 'Напиши викладачу: питання про урок, ДЗ чи перенос заняття.' : 'Ще немає повідомлень'}</p>`;
   // перемальовуємо лише при змінах — інакше голосове обривається на кожному оновленні
   if (el._html !== html) el.innerHTML = el._html = html;

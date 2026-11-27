@@ -452,11 +452,17 @@ dialog.wide { width: min(760px, calc(100vw - 32px)); }
   background: radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--ink) 9%, transparent) 1px, transparent 1.5px) 0 0 / 22px 22px,
     linear-gradient(160deg, color-mix(in srgb, var(--acc) 12%, var(--bg)), var(--bg) 55%, color-mix(in srgb, var(--mint) 9%, var(--bg))); }
 .chat-msgs .empty { margin: auto; padding: 8px 14px; border-radius: 14px; text-align: center; background: color-mix(in srgb, var(--surf) 80%, transparent); }
-.msg { position: relative; align-self: flex-start; max-width: 78%; padding: 6px 10px 7px 12px; border-radius: 18px 18px 18px 4px; background: var(--surf);
+.msg { position: relative; align-self: flex-start; max-width: 78%; padding: 6px 10px 7px 12px; border-radius: 18px 18px 18px 6px; background: var(--surf);
   box-shadow: 0 1px 1px rgb(0 0 0 / .12); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.35; }
-.msg.mine { align-self: flex-end; border-radius: 18px 18px 4px 18px; background: linear-gradient(120deg, var(--acc), var(--acc2)); color: #fff; }
-.msg::before { content: ''; position: absolute; bottom: 0; left: -7px; width: 9px; height: 12px; background: radial-gradient(circle at 0 0, transparent 8.5px, var(--surf) 9px); }
-.msg.mine::before { left: auto; right: -7px; background: radial-gradient(circle at 100% 0, transparent 8.5px, var(--acc2) 9px); }
+.msg.mine { align-self: flex-end; border-radius: 18px 18px 6px 18px; background: linear-gradient(120deg, var(--acc), var(--acc2)); color: #fff; }
+/* хвостик як у Telegram: форма — маска, колір — як у бульбашки */
+/* хвостик лише в останнього повідомлення серії */
+.msg.tail { border-bottom-left-radius: 0; }
+.msg.mine.tail { border-bottom-left-radius: 18px; border-bottom-right-radius: 0; }
+.msg:not(.tail)::before { display: none; }
+.msg::before { content: ''; position: absolute; bottom: 0; left: -8.5px; width: 9px; height: 17px; background: var(--surf); scale: -1 1;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 9 17'%3E%3Cpath d='M0 0v17h7.6a1 1 0 0 0 .7-1.7C4.4 11.6 1.1 7.6 0 0Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 9 17'%3E%3Cpath d='M0 0v17h7.6a1 1 0 0 0 .7-1.7C4.4 11.6 1.1 7.6 0 0Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat; }
+.msg.mine::before { left: auto; right: -8.5px; scale: 1 1; background: var(--acc2); }
 .msg::after { content: ''; display: block; clear: both; }
 .msg small { float: right; position: relative; top: 7px; margin-left: 10px; font-size: 11px; line-height: 1; opacity: .65; }
 .chat-day { align-self: center; margin: 8px 0 4px; padding: 4px 11px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--ink);
@@ -484,7 +490,8 @@ dialog.wide { width: min(760px, calc(100vw - 32px)); }
 .chat-form .act, .chat-form > .btn.send { width: 48px; height: 48px; padding: 0; border-radius: 50%; color: #fff; background: linear-gradient(120deg, var(--acc), var(--acc2)); box-shadow: 0 6px 16px color-mix(in srgb, var(--acc) 35%, transparent); }
 .chat-form .act:hover { color: #fff; }
 .chat-form > .btn.send { display: grid; place-items: center; font-size: 0; }
-.chat-form > .btn.send::after { content: '➤'; font-size: 20px; }
+.chat-form > .btn.send::after { content: ''; width: 24px; height: 24px; margin-left: 3px; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3.4 20.4l17.45-7.48a1 1 0 0 0 0-1.84L3.4 3.6a1 1 0 0 0-1.39.91L2 9.12c0 .5.37.93.87.99L17 12 2.87 13.88c-.5.07-.87.5-.87 1l.01 4.61c0 .71.73 1.2 1.39.91z'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3.4 20.4l17.45-7.48a1 1 0 0 0 0-1.84L3.4 3.6a1 1 0 0 0-1.39.91L2 9.12c0 .5.37.93.87.99L17 12 2.87 13.88c-.5.07-.87.5-.87 1l.01 4.61c0 .71.73 1.2 1.39.91z'/%3E%3C/svg%3E") center / contain no-repeat; }
 /* Telegram: мікрофон, поки поле порожнє; стрілка — коли є текст або вкладення (під час запису лишається таймер) */
 .chat-form:has(textarea:placeholder-shown):not(:has(.att:not([hidden]))) > .send { display: none; }
 .chat-form:not(:has(textarea:placeholder-shown)) > [data-voice]:not(.rec), .chat-form:has(.att:not([hidden])) > [data-voice]:not(.rec) { display: none; }
