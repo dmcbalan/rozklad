@@ -982,7 +982,7 @@ function syncPublic(recs, rem) {
     const data = { name: n, paid: st.paid || 0, remaining: rem(n),
       history: (recs[n] || []).slice(0, 30).map(x => ({ id: x.id, date: x.date, hour: x.hour ?? null, status: x.status, kind: x.kind || 'regular' })),
       notes: notesOf(n).slice(0, 20).map(x => ({ date: x.date, topic: x.topic || '', homework: x.homework || '' })),
-      streak: pr.streak, present: pr.present, best: pr.best, badges: st.badges || [], certs: st.certs || [], pid: st.pid || '', refPaid: st.refPaid || 0, reports: Object.keys(st.reports || {}).sort().slice(-3) };
+      streak: pr.streak, present: pr.present, best: pr.best, badges: st.badges || [], certs: st.certs || [], pid: st.pid || '', refPaid: st.refPaid || 0, aud: st.aud || '', reports: Object.keys(st.reports || {}).sort().slice(-3) };
     const json = JSON.stringify(data);
     if (synced[st.token] === json) continue;
     synced[st.token] = json;
@@ -2219,7 +2219,7 @@ async function saveReport() {
   const fresh = !(m in (students[n]?.reports || {}));
   const pid = students[n]?.pid || await ensurePid(n);
   await F.setDoc(F.doc(db, 'students', n), { reports: { [m]: comment } }, { merge: true });
-  if (fresh) notifyStudent(n, 'report', `Звіт за ${monthName(m)} готовий — покажи батькам!`);
+  if (fresh) notifyStudent(n, 'report', students[n]?.aud === 'adults' ? `Звіт за ${monthName(m)} готовий` : `Звіт за ${monthName(m)} готовий — покажи батькам!`);
   return reportUrl(pid, m);
 }
 $('#repForm').onsubmit = async e => {
@@ -2237,9 +2237,12 @@ $('#repForm').onclick = async e => {
 
 // Кабінет: картка останнього звіту на «Огляді»
 function renderMeReport() {
+  // дорослий учень (група «Дорослі» в картці учня): без дитячих вкладок, запрошення друзів і підказок для батьків
+  const adult = me.aud === 'adults';
+  document.body.classList.toggle('adult', adult);
   const m = (me.reports || []).at(-1), box = $('#meReport'), show = !!(me.pid && m && m >= shiftMonth(monthKey(), -1));
   box.hidden = !show;
-  box.innerHTML = show ? `<div class="folio-link rep-link"><span>📊</span><div><b>Звіт за ${esc(monthName(m))}</b><small class="muted">Що ти вивчив(ла) за місяць, медалі й відгук викладача — покажи батькам</small></div>
+  box.innerHTML = show ? `<div class="folio-link rep-link"><span>📊</span><div><b>Звіт за ${esc(monthName(m))}</b><small class="muted">${adult ? 'Що вивчено за місяць, теми, завдання й відгук викладача' : 'Що ти вивчив(ла) за місяць, медалі й відгук викладача — покажи батькам'}</small></div>
     <a class="ghost link-btn" href="${esc(reportUrl(me.pid, m))}" target="_blank" rel="noopener">Відкрити</a><button class="btn sm" data-sharereport="${m}">Поділитися</button></div>` : '';
 }
 $('#meReport').onclick = e => { const b = e.target.closest('[data-sharereport]'); if (b) shareFolio(reportUrl(me.pid, b.dataset.sharereport), me.name, `звіт за ${monthName(b.dataset.sharereport)}`); };
